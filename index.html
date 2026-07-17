@@ -1,0 +1,1684 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Balıkesir Şehir Planlama Takip Sistemi</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS (Excel Parser) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0B0F19;
+        }
+        .heading-font {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0D1321;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1F2E4D;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3B82F6;
+        }
+        /* Map custom grid background */
+        .grid-bg {
+            background-color: #080C14;
+            background-image: 
+                radial-gradient(rgba(59, 130, 246, 0.1) 1px, transparent 0),
+                radial-gradient(rgba(59, 130, 246, 0.05) 1px, transparent 0);
+            background-size: 24px 24px;
+            background-position: 0 0, 12px 12px;
+        }
+        /* Glow Effects */
+        .glow-blue {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+        }
+        .glow-emerald {
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+        }
+        
+        /* Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #22D3EE;
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 0 10px rgba(34, 211, 238, 0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #1F2E4D;
+            border-radius: 2px;
+        }
+
+        /* Dual-range (çift uçlu min/max) slider: iki <input type=range> üst üste bindirilir.
+           Track'ler pointer-events:none yapılır (yalnızca thumb tıklanabilir olur) böylece alttaki
+           input'un thumb'ı, üsttekinin track'i tarafından "yutulmaz". Ortak tek bir çizgi
+           .dual-range::before ile çizilir, iki track'in üst üste binmesi engellenir. */
+        .dual-range {
+            position: relative;
+            height: 20px;
+        }
+        .dual-range::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 4px;
+            background: #1F2E4D;
+            border-radius: 2px;
+            pointer-events: none;
+        }
+        .dual-range input[type=range] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 20px;
+            margin: 0;
+            pointer-events: none;
+        }
+        .dual-range input[type=range]::-webkit-slider-thumb {
+            pointer-events: auto;
+        }
+        .dual-range input[type=range]::-webkit-slider-runnable-track {
+            background: transparent;
+        }
+        .dual-range input[type=range]::-moz-range-thumb {
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #22D3EE;
+            cursor: pointer;
+            border: none;
+            pointer-events: auto;
+            box-shadow: 0 0 10px rgba(34, 211, 238, 0.5);
+        }
+        .dual-range input[type=range]::-moz-range-track {
+            background: transparent;
+            height: 4px;
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen overflow-x-hidden">
+
+    <header class="border-b border-[#1A263E] bg-[#0A0E17]/95 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex flex-col xl:flex-row items-center justify-between gap-4">
+        <!-- Sol: Logo ve Başlık -->
+        <div class="flex items-center space-x-3.5 flex-shrink-0">
+            <div class="bg-gradient-to-tr from-cyan-500 to-blue-600 p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
+                <i class="fa-solid fa-map-location-dot text-2xl text-white"></i>
+            </div>
+            <div>
+                <h1 class="text-xl md:text-2xl font-bold heading-font tracking-wide bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+                    Balıkesir Şehir Planlama Takip Sistemi
+                </h1>
+                <p class="text-xs text-cyan-400 font-medium tracking-wider uppercase">
+                    CBS ve İmar Raporlama Portalı
+                </p>
+            </div>
+        </div>
+        
+        <!-- Orta: Kompakt Sürükle Bırak (Drag & Drop) Alanı -->
+        <div class="flex-1 max-w-2xl mx-4 w-full hidden md:block">
+            <div id="drop-zone" class="border border-dashed border-[#1F2E4D] hover:border-cyan-500 bg-[#0A0E17] rounded-lg py-2 px-4 text-center cursor-pointer transition duration-300 flex items-center justify-center gap-3 group">
+                <input type="file" id="file-uploader" accept=".xls,.xlsx" class="hidden">
+                <i class="fa-solid fa-file-excel text-cyan-500 group-hover:scale-110 transition duration-300 text-lg"></i>
+                <span class="text-xs font-semibold text-slate-300 heading-font group-hover:text-cyan-400 transition truncate">
+                    Excel Dosyasını Buraya Sürükle veya Seç
+                </span>
+            </div>
+        </div>
+        
+        <!-- Sağ: Live status indicators -->
+        <div class="flex items-center space-x-4 text-xs text-slate-400 flex-shrink-0">
+            <div class="hidden lg:flex flex-col items-center text-center bg-[#111827] border border-[#1F2E4D] rounded-xl px-4 py-2">
+                <span class="text-slate-500 block">PROJE BÖLGESİ</span>
+                <span class="font-semibold text-slate-200">Balıkesir</span>
+            </div>
+            <div class="flex flex-col items-center text-center bg-[#111827] border border-[#1F2E4D] rounded-xl px-4 py-2">
+                <span class="text-slate-500 block">VERİ ENTEGRASYONU</span>
+                <span id="excel-status" class="font-semibold text-cyan-400 flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Excel Bekleniyor
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN GRID CONTAINER -->
+    <main class="p-6 grid grid-cols-1 xl:grid-cols-12 gap-6 max-w-[1800px] mx-auto">
+
+        <!-- SOL FİLTRE PANELİ (GERİ GETİRİLDİ) -->
+        <section class="xl:col-span-3 bg-[#0A0E17] border border-[#1A263E] rounded-2xl p-5 flex flex-col space-y-6 shadow-2xl h-fit">
+            <div class="flex items-center justify-between border-b border-[#1A263E] pb-4">
+                <h2 class="text-base font-bold heading-font flex items-center gap-2 text-slate-200">
+                    <i class="fa-solid fa-sliders text-cyan-500"></i> Karar Destek Filtreleri
+                </h2>
+                <button onclick="resetFilters()" class="text-[11px] text-rose-400 hover:text-rose-300 transition flex items-center gap-1 font-semibold bg-rose-500/10 px-2 py-1 rounded-md border border-rose-500/20">
+                    <i class="fa-solid fa-rotate-left"></i> Filtreleri Temizle
+                </button>
+            </div>
+
+            <!-- SEARCH -->
+            <div>
+                <label class="text-xs text-slate-400 font-semibold uppercase tracking-wider block mb-2">Parsel No (ID) / Mahalle Ara</label>
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 text-sm"></i>
+                    <input type="text" id="search-input" onkeyup="filterData()" placeholder="Örn: Karesi, Atatürk, K-EGE..."
+                           class="w-full bg-[#111827] border border-[#1F2E4D] rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-cyan-500 transition placeholder-slate-600">
+                </div>
+                <!-- Seçili mahalleler (kaldırılabilir etiketler) -->
+                <div id="selected-mahalle-chips" class="hidden flex flex-wrap gap-1.5 mt-2.5"></div>
+            </div>
+
+            <!-- MAHALLE SLICER (A-Z sıralı, kaydırılabilir liste — çok sayıda mahalle için) -->
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Mahalle Slicer <span class="normal-case text-slate-500">(Çoklu, A-Z)</span></label>
+                    <button id="mahalle-clear-all-btn" type="button" onclick="toggleMahalle('ALL')" class="hidden text-[10px] text-rose-400 hover:text-rose-300 font-semibold transition">Tümünü Kaldır</button>
+                </div>
+                <div id="mahalle-slicer-container" class="max-h-60 overflow-y-auto custom-scrollbar bg-[#111827] border border-[#1F2E4D] rounded-xl divide-y divide-[#1A263E]">
+                    <!-- Dinamik olarak, alfabetik sıralı doldurulur -->
+                </div>
+            </div>
+
+            <!-- BİNA SAYISI SLIDER (çift uçlu: min ve max) -->
+            <div class="bg-[#111827] border border-[#1F2E4D] rounded-xl p-4">
+                <div class="flex justify-between items-center mb-3">
+                    <label class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Bina Sayısı Aralığı</label>
+                    <span class="text-[11px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                        <span id="bina-val">0</span> - <span id="bina-max-val">150</span> Bina
+                    </span>
+                </div>
+                <div class="dual-range">
+                    <input type="range" id="bina-slider" min="0" max="150" value="0" oninput="updateSliders()">
+                    <input type="range" id="bina-slider-max" min="0" max="150" value="150" oninput="updateSliders()">
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-500 mt-2 font-medium">
+                    <span>0</span>
+                    <span id="bina-max-label">150</span>
+                </div>
+            </div>
+
+            <!-- ORTALAMA PUAN SLIDER (çift uçlu: min ve max) -->
+            <div class="bg-[#111827] border border-[#1F2E4D] rounded-xl p-4">
+                <div class="flex justify-between items-center mb-3">
+                    <label class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Ortalama Puan Aralığı</label>
+                    <span class="text-[11px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                        <span id="puan-val">-130</span> - <span id="puan-max-val">190</span> Puan
+                    </span>
+                </div>
+                <div class="dual-range">
+                    <input type="range" id="puan-slider" min="-130" max="190" value="-130" oninput="updateSliders()">
+                    <input type="range" id="puan-slider-max" min="-130" max="190" value="190" oninput="updateSliders()">
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-500 mt-2 font-medium">
+                    <span>-130</span>
+                    <span>190</span>
+                </div>
+            </div>
+
+            <!-- DENSITY SELECT -->
+            <div>
+                <label class="text-xs text-slate-400 font-semibold uppercase tracking-wider block mb-2">Yapı Yoğunluğu Sınıfı</label>
+                <select id="density-select" onchange="filterData()" class="w-full bg-[#111827] border border-[#1F2E4D] rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-cyan-500 transition">
+                    <option value="ALL">Tümü (Sınırsız)</option>
+                    <option value="HIGH">Yüksek Yoğunluk (>50 Bina)</option>
+                    <option value="MEDIUM">Orta Yoğunluk (20 - 50 Bina)</option>
+                    <option value="LOW">Düşük Yoğunluk (<20 Bina)</option>
+                </select>
+            </div>
+
+            <!-- QUALITY SCALE SELECT -->
+            <div>
+                <label class="text-xs text-slate-400 font-semibold uppercase tracking-wider block mb-2">Puan Kalite Skalası</label>
+                <select id="quality-select" onchange="filterData()" class="w-full bg-[#111827] border border-[#1F2E4D] rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-cyan-500 transition">
+                    <option value="ALL">Tümü (Sınırsız)</option>
+                    <option value="HARIKA">Harika (60 - 190)</option>
+                    <option value="COK_IYI">Çok İyi (45 - 60)</option>
+                    <option value="IYI">İyi (30 - 45)</option>
+                    <option value="ORTA">Orta (0 - 30)</option>
+                    <option value="KOTU">Kötü (-30 - 0)</option>
+                    <option value="KRITIK">Kritik (-130 - -30)</option>
+                </select>
+            </div>
+
+            <div class="pt-4 border-t border-[#1A263E] text-[11px] text-slate-400 space-y-2">
+                <p class="flex items-center gap-2"><i class="fa-solid fa-circle-info text-cyan-400"></i> Excel dosyası yüklendiğinde filtreler otomatik olarak yeni aralıklara göre ayarlanır.</p>
+                <p class="flex items-center gap-2"><i class="fa-solid fa-arrows-rotate text-cyan-400"></i> Tabloda kolon isimlerine tıklayarak sıralama yapabilirsiniz.</p>
+            </div>
+        </section>
+
+        <section class="xl:col-span-9 flex flex-col space-y-6">
+            
+            <!-- KPI METRIC CARDS -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                
+                <!-- KPI 1: Toplam Parsel -->
+                <div onclick="toggleKpiDetail('parsel')" class="bg-gradient-to-br from-[#0D1527] to-[#0A0E17] border border-[#1A263E] p-4 rounded-2xl flex items-center justify-between shadow-lg glow-blue transition-all duration-300 hover:translate-y-[-2px] cursor-pointer">
+                    <div class="space-y-1">
+                        <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Aktif İmar Adası</span>
+                        <div class="flex items-baseline space-x-1.5">
+                            <span id="kpi-parsel" class="text-2xl font-bold heading-font text-white">0</span>
+                            <span class="text-xs text-cyan-400 font-medium">Adet</span>
+                        </div>
+                    </div>
+                    <div class="bg-cyan-500/10 p-3 rounded-xl border border-cyan-500/20 text-cyan-400">
+                        <i class="fa-solid fa-layer-group text-lg"></i>
+                    </div>
+                </div>
+
+                <!-- KPI 2: Toplam Bina -->
+                <div onclick="toggleKpiDetail('bina')" class="bg-gradient-to-br from-[#0D1527] to-[#0A0E17] border border-[#1A263E] p-4 rounded-2xl flex items-center justify-between shadow-lg glow-blue transition-all duration-300 hover:translate-y-[-2px] cursor-pointer">
+                    <div class="space-y-1">
+                        <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Toplam Yapı Stoğu</span>
+                        <div class="flex items-baseline space-x-1.5">
+                            <span id="kpi-bina" class="text-2xl font-bold heading-font text-white">0</span>
+                            <span class="text-xs text-blue-400 font-medium">Bina</span>
+                        </div>
+                    </div>
+                    <div class="bg-blue-500/10 p-3 rounded-xl border border-blue-500/20 text-blue-400">
+                        <i class="fa-solid fa-building text-lg"></i>
+                    </div>
+                </div>
+
+                <!-- KPI 3: Toplam Çalışma Alanı -->
+                <div onclick="toggleKpiDetail('alan')" class="bg-gradient-to-br from-[#0D1527] to-[#0A0E17] border border-[#1A263E] p-4 rounded-2xl flex items-center justify-between shadow-lg glow-blue transition-all duration-300 hover:translate-y-[-2px] cursor-pointer">
+                    <div class="space-y-1">
+                        <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">İmar Planlama Alanı</span>
+                        <div class="flex items-baseline space-x-1.5">
+                            <span id="kpi-alan" class="text-2xl font-bold heading-font text-white">0.00</span>
+                            <span class="text-xs text-emerald-400 font-medium">Hektar</span>
+                        </div>
+                    </div>
+                    <div class="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 text-emerald-400">
+                        <i class="fa-solid fa-vector-square text-lg"></i>
+                    </div>
+                </div>
+
+                <!-- KPI 4: Ağırlıklı Puan -->
+                <div onclick="toggleKpiDetail('puan')" class="bg-gradient-to-br from-[#0D1527] to-[#0A0E17] border border-[#1A263E] p-4 rounded-2xl flex items-center justify-between shadow-lg glow-emerald transition-all duration-300 hover:translate-y-[-2px] cursor-pointer">
+                    <div class="space-y-1">
+                        <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Genel Hizmet Skoru</span>
+                        <div class="flex items-baseline space-x-1.5">
+                            <span id="kpi-puan" class="text-2xl font-bold heading-font text-emerald-400">0.00</span>
+                            <span class="text-xs text-emerald-400 font-medium">Skor</span>
+                        </div>
+                    </div>
+                    <div class="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 text-emerald-400">
+                        <i class="fa-solid fa-chart-line text-lg"></i>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- KPI DETAIL EXPANSION PANEL (KPI karta tıklayınca açılır, altındaki içerikleri aşağı iter) -->
+            <div id="kpi-detail-panel" class="hidden bg-[#0A0E17] border border-[#1A263E] rounded-2xl p-5 shadow-2xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h4 class="text-sm font-bold heading-font tracking-wide text-slate-200 uppercase flex items-center gap-2">
+                        <i class="fa-solid fa-chart-simple text-cyan-400"></i> <span id="kpi-detail-title-text"></span>
+                    </h4>
+                    <button onclick="closeKpiDetail()" class="text-slate-400 hover:text-white transition w-8 h-8 rounded-lg hover:bg-[#1A263E] flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="relative overflow-x-auto overflow-y-hidden custom-scrollbar" style="height: 320px;">
+                    <div id="kpi-detail-chart-inner" style="height: 100%; min-width: 100%;">
+                        <canvas id="kpi-detail-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-[#0A0E17] border border-[#1A263E] rounded-2xl p-5 flex flex-col h-[420px] shadow-2xl relative overflow-hidden">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-bold heading-font tracking-wide text-slate-200 uppercase flex items-center gap-2">
+                        <i class="fa-solid fa-earth-europe text-cyan-400"></i> İnteraktif İmar Adaları Simülasyon Haritası
+                    </h3>
+                    <div class="flex items-center gap-3">
+                        <span class="text-[11px] bg-slate-800 text-slate-300 px-3 py-1 rounded-full border border-slate-700 font-medium flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+                            Scroll Destekli Matris Aktif
+                        </span>
+                    </div>
+                </div>
+
+                <!-- GIS Map CSS Grid Container (Scrollable, precisely 4 visible rows) -->
+                <div id="interactive-map" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); gap: 12px; align-content: start;" 
+                     class="flex-grow rounded-xl overflow-y-auto overflow-x-hidden relative grid-bg border border-[#152035] p-3 custom-scrollbar h-[270px]">
+                    <!-- Dynamic HTML boxes will be auto-rendered here -->
+                </div>
+
+                <!-- Floating Heatmap Scale (Hover Activated) -->
+                <div class="absolute bottom-5 left-5 group z-20">
+                    <button class="bg-[#111827] border border-[#1F2E4D] text-slate-300 w-10 h-10 rounded-full shadow-lg hover:bg-[#1A263E] hover:text-cyan-400 hover:border-cyan-500/50 transition duration-300 flex items-center justify-center">
+                        <i class="fa-solid fa-layer-group text-sm"></i>
+                    </button>
+                    
+                    <div class="absolute bottom-full left-0 mb-3 bg-[#0A0E17]/95 border border-[#1A263E] rounded-xl p-3.5 text-[11px] space-y-2 backdrop-blur-md shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 w-52 transform translate-y-2 group-hover:translate-y-0">
+                        <div class="font-bold text-slate-400 uppercase tracking-wider mb-2 border-b border-[#1A263E] pb-1.5">Puan Kalite Skalası</div>
+                        <div class="flex flex-col gap-2">
+                            <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded bg-[#10B981] shadow-sm"></span><span class="text-slate-300 font-medium">Harika (60 - 190)</span></div>
+                            <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded bg-[#22D3EE] shadow-sm"></span><span class="text-slate-300 font-medium">Çok İyi (45 - 60)</span></div>
+                            <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded bg-[#3B82F6] shadow-sm"></span><span class="text-slate-300 font-medium">İyi (30 - 45)</span></div>
+                            <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded bg-[#F59E0B] shadow-sm"></span><span class="text-slate-300 font-medium">Orta (0 - 30)</span></div>
+                            <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded bg-[#F43F5E] shadow-sm"></span><span class="text-slate-300 font-medium">Kötü (-30 - 0)</span></div>
+                            <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded bg-[#9F1239] shadow-sm"></span><span class="text-slate-300 font-medium">Kritik (-130 - -30)</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Floating details on hover (positioned dynamically above/below the hovered box, animated) -->
+                <div id="map-hover-info" class="absolute bg-[#0A0E17]/95 border border-[#1A263E] rounded-xl p-4 text-xs shadow-2xl pointer-events-none w-[240px] z-30 backdrop-blur-md opacity-0" style="transition: top 0.25s ease-out, opacity 0.25s ease-out;">
+                    <!-- Injected dynamically on hover -->
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <div class="lg:col-span-7 bg-[#0A0E17] border border-[#1A263E] rounded-2xl p-5 shadow-2xl flex flex-col h-[320px] overflow-hidden">
+                    <h4 class="text-sm font-bold heading-font tracking-wide text-slate-200 uppercase flex items-center gap-2 mb-4">
+                        <i class="fa-solid fa-chart-column text-cyan-400"></i> Puan Ortalaması ve Bina Yoğunluğu İlişkisi (Top 50)
+                    </h4>
+                    <div class="flex-grow relative min-h-0">
+                        <canvas id="score-density-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-5 bg-[#0A0E17] border border-[#1A263E] rounded-2xl p-5 shadow-2xl flex flex-col h-[320px] overflow-hidden">
+                    <h4 class="text-sm font-bold heading-font tracking-wide text-slate-200 uppercase flex items-center gap-2 mb-4">
+                        <i class="fa-solid fa-chart-pie text-cyan-400"></i> Bölgesel Alan Dağılım Oranları
+                    </h4>
+                    <div class="flex-grow relative min-h-0">
+                        <canvas id="distribution-pie-chart"></canvas>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="bg-[#0A0E17] border border-[#1A263E] rounded-2xl p-5 shadow-2xl">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-[#1A263E] pb-4 mb-4 gap-4">
+                    <div>
+                        <h4 class="text-sm font-bold heading-font tracking-wide text-slate-200 uppercase flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-cyan-400"></i> İmar Adaları Detay Analiz Tablosu
+                        </h4>
+                        <p class="text-xs text-slate-400 mt-1">Kolon başlıklarına tıklayarak sıralama yapabilirsiniz. Tablo her sayfada 10 kayıt gösterir.</p>
+                    </div>
+                    <button onclick="exportToCSV()" class="text-xs text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-xl flex items-center gap-2 transition duration-200 shadow-lg shadow-emerald-500/5">
+                        <i class="fa-solid fa-file-csv text-base"></i> Filtrelenmiş Veriyi CSV Olarak Aktar
+                    </button>
+                </div>
+
+                <!-- Live data counter -->
+                <div class="text-xs text-slate-400 mb-3 flex items-center justify-between">
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></span>
+                        Filtreye Uygun <strong id="table-record-count" class="text-cyan-400">0</strong> İmar Adası Gösteriliyor.
+                    </span>
+                    <span id="active-sort-label" class="text-slate-500 italic">Sıralama: OBJECTID (Artan)</span>
+                </div>
+
+                <!-- Main table container -->
+                <div class="overflow-x-auto rounded-xl border border-[#152035]">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead class="bg-[#111827] text-slate-400 font-bold uppercase tracking-wider border-b border-[#1A263E]">
+                            <tr id="table-headers">
+                                <th class="p-3.5 text-center cursor-pointer hover:bg-[#1A263E]/50 transition select-none" onclick="handleSort('OBJECTID')">
+                                    ID <i class="fa-solid fa-sort ml-1 text-slate-500 text-[10px]" id="sort-icon-OBJECTID"></i>
+                                </th>
+                                <th class="p-3.5 cursor-pointer hover:bg-[#1A263E]/50 transition select-none" onclick="handleSort('ilce')">
+                                    İlçe <i class="fa-solid fa-sort ml-1 text-slate-500 text-[10px]" id="sort-icon-ilce"></i>
+                                </th>
+                                <th class="p-3.5 cursor-pointer hover:bg-[#1A263E]/50 transition select-none" onclick="handleSort('mahalle')">
+                                    Mahalle <i class="fa-solid fa-sort ml-1 text-slate-500 text-[10px]" id="sort-icon-mahalle"></i>
+                                </th>
+                                <th class="p-3.5 text-right cursor-pointer hover:bg-[#1A263E]/50 transition select-none" onclick="handleSort('bina_sayisi')">
+                                    Bina Sayısı <i class="fa-solid fa-sort ml-1 text-slate-500 text-[10px]" id="sort-icon-bina_sayisi"></i>
+                                </th>
+                                <th class="p-3.5 text-right cursor-pointer hover:bg-[#1A263E]/50 transition select-none" onclick="handleSort('Shape_Area')">
+                                    Alan (m²) <i class="fa-solid fa-sort ml-1 text-slate-500 text-[10px]" id="sort-icon-Shape_Area"></i>
+                                </th>
+                                <th class="p-3.5 text-right cursor-pointer hover:bg-[#1A263E]/50 transition select-none" onclick="handleSort('puan_ortalama')">
+                                    Puan Ort. <i class="fa-solid fa-sort ml-1 text-slate-500 text-[10px]" id="sort-icon-puan_ortalama"></i>
+                                </th>
+                                <th class="p-3.5 text-right cursor-pointer hover:bg-[#1A263E]/50 transition select-none" onclick="handleSort('puan_std_sapma')">
+                                    Puan Std. Sapma <i class="fa-solid fa-sort ml-1 text-slate-500 text-[10px]" id="sort-icon-puan_std_sapma"></i>
+                                </th>
+                                <th class="p-3.5 text-right cursor-pointer hover:bg-[#1A263E]/50 transition select-none" onclick="handleSort('puan_range')">
+                                    Puan Aralığı <i class="fa-solid fa-sort ml-1 text-slate-500 text-[10px]" id="sort-icon-puan_range"></i>
+                                </th>
+                                <th class="p-3.5 text-center">Durum</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body" class="divide-y divide-[#152035]">
+                            <!-- Rows dynamically injected -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-5 pt-4 border-t border-[#152035]">
+                    <div class="text-xs text-slate-400">
+                        Gösterilen Kayıt: <span id="pag-start" class="font-bold text-slate-200">0</span> - <span id="pag-end" class="font-bold text-slate-200">0</span> / Toplam <span id="pag-total" class="font-bold text-slate-200">0</span>
+                    </div>
+                    <div class="flex items-center space-x-2" id="pagination-buttons">
+                        <!-- Pagination buttons generated dynamically -->
+                    </div>
+                </div>
+
+            </div>
+
+        </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="mt-16 py-8 border-t border-[#1A263E] bg-[#070A11] text-center text-xs text-slate-500">
+        <div class="max-w-[1800px] mx-auto px-6 space-y-2">
+            <p>© 2026 Balıkesir Büyükşehir Belediyesi - Şehir Planlama ve İmar Dairesi Başkanlığı.</p>
+            <p class="text-slate-600">Dinamik CBS Entegrasyonu & Karar Destek Paneli</p>
+        </div>
+    </footer>
+
+    <script>
+        // Start empty. Data is populated dynamically from excel.
+        let raw_dataset = [];
+
+        // System Configuration State
+        let active_mahalles = new Set(); // Empty set == 'Tümü' (ALL) selected
+        let min_bina = 0;
+        let max_bina = 150;
+        let min_puan = -130;
+        let max_puan = 190;
+        let active_sort_column = 'OBJECTID';
+        let active_sort_direction = 'asc';
+        let current_page = 1;
+        const page_size = 10;
+        let last_filtered_data = [];
+
+        // Global Chart instances
+        let densityChart, pieChart, kpiDetailChart;
+        let activeKpiDetail = null;
+
+        // Initialize App components
+        document.addEventListener('DOMContentLoaded', () => {
+            initExcelDropzone();
+            initCharts();
+            bindDualRangeStacking(document.getElementById('bina-slider'), document.getElementById('bina-slider-max'));
+            bindDualRangeStacking(document.getElementById('puan-slider'), document.getElementById('puan-slider-max'));
+            // Automatically attempt loading from configured local path on startup
+            autoLoadLocalExcel();
+        });
+
+        function initExcelDropzone() {
+            const dropZone = document.getElementById('drop-zone');
+            const fileUploader = document.getElementById('file-uploader');
+
+            dropZone.addEventListener('click', () => fileUploader.click());
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('border-cyan-500', 'bg-cyan-500/10');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('border-cyan-500', 'bg-cyan-500/10');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('border-cyan-500', 'bg-cyan-500/10');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    processExcelFile(files[0]);
+                    fileUploader.value = ''; // Reset input to allow re-upload of same file
+                }
+            });
+
+            fileUploader.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    processExcelFile(e.target.files[0]);
+                    e.target.value = ''; // Reset input
+                }
+            });
+        }
+
+        // Processing Excel File locally via SheetJS
+        function processExcelFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    parseAndLoadExcelData(data, file.name);
+                } catch (error) {
+                    console.error("Excel Read Error:", error);
+                    showFloatingNotification("Excel okunurken hata oluştu. Lütfen formatı kontrol edin.", "error");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Common parser helper for excel data blocks with flexible column matching
+        function parseAndLoadExcelData(dataArray, sourceName) {
+            const workbook = XLSX.read(dataArray, { type: 'array' });
+            
+            // Prioritize specific data sheets if they exist, else grab the first one
+            let sheetName = workbook.SheetNames[0];
+            if (workbook.SheetNames.includes('Detaylı Veriler')) {
+                sheetName = 'Detaylı Veriler';
+            } else if (workbook.SheetNames.includes('cizimler')) {
+                sheetName = 'cizimler';
+            }
+
+            const worksheet = workbook.Sheets[sheetName];
+            const json = XLSX.utils.sheet_to_json(worksheet, { defval: 0 });
+
+            if (json.length === 0) {
+                showFloatingNotification(`Seçilen '${sheetName}' sekmesi boş görünüyor veya okunamadı!`, "error");
+                return;
+            }
+
+            raw_dataset = json.map((item, index) => {
+                // Flexible matching for column headers (ignores case and spaces)
+                const getVal = (possibleKeys, defaultVal) => {
+                    for (let key of possibleKeys) {
+                        if (item[key] !== undefined) return item[key];
+                        const normalizedItemKeys = Object.keys(item).map(k => k.toLowerCase().replace(/\s/g, ''));
+                        const matchIndex = normalizedItemKeys.indexOf(key.toLowerCase().replace(/\s/g, ''));
+                        if (matchIndex !== -1) return item[Object.keys(item)[matchIndex]];
+                    }
+                    return defaultVal;
+                };
+
+                return {
+                    // Kodlanmış kimlik (ör. "K-ATA-0001" — ilçe+mahalle bazlı, ortak Excel'de
+                    // çakışma olmasın diye kullanılıyor). Sayısal değil metin olarak tutulur;
+                    // "numara" kolonu bu kodun yazıldığı yerdir.
+                    OBJECTID: String(getVal(['numara', 'Numara', 'NUMARA', 'No', 'no', 'OBJECTID', 'id', 'ObjectID', 'Oid', 'FID'], index + 1)).trim(),
+                    Shape_Length: parseFloat(getVal(['Shape_Length', 'Length', 'Uzunluk', 'Shape_Leng'], 0)) || 0,
+                    Shape_Area: parseFloat(getVal(['Shape_Area', 'Area', 'Alan', 'Shape_Area'], 0)) || 0,
+                    bina_sayisi: parseInt(getVal(['bina_sayisi', 'bina_sayısı', 'Bina Sayısı', 'bina', 'Bina', 'binasayisi'], 0)) || 0,
+                    puan_toplam: parseFloat(getVal(['puan_toplam', 'Puan Toplam', 'puan'], 0)) || 0,
+                    puan_ortalama: parseFloat(getVal(['puan_ortalama', 'Puan Ortalama', 'ortalama', 'Puan_Ortalama'], 0)) || 0,
+                    puan_min: parseFloat(getVal(['puan_min', 'Puan Min', 'min_puan', 'Min'], 0)) || 0,
+                    puan_max: parseFloat(getVal(['puan_max', 'Puan Max', 'max_puan', 'Max'], 0)) || 0,
+                    puan_range: parseFloat(getVal(['puan_range', 'Puan Aralığı', 'aralik', 'Range'], 0)) || 0,
+                    puan_std_sapma: parseFloat(getVal(['puan_std_sapma', 'Std Sapma', 'std_sapma', 'Sapma'], 0)) || 0,
+                    ilce: String(getVal(['ilce', 'ilçe', 'İlçe', 'Ilce'], 'KARESİ')),
+                    mahalle: String(getVal(['mahalle', 'Mahalle', 'MAHALLE'], 'Merkez'))
+                };
+            });
+
+            showFloatingNotification(`${raw_dataset.length} adet imar adası başarıyla entegre edildi!`, "success");
+            
+            // Update UI status bar
+            const statusEl = document.getElementById('excel-status');
+            if(statusEl) {
+                statusEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> ${sourceName} Aktif`;
+                statusEl.className = "font-semibold text-emerald-400 flex items-center justify-center gap-1.5";
+            }
+            
+            // Re-initialize dynamic UI elements based on new data
+            setupSlidersAndRanges();
+            buildDynamicSlicers();
+            resetFilters();
+        }
+
+        // Automatic Excel Loader from Desktop path (Requires local server or loosened browser security)
+        async function autoLoadLocalExcel() {
+            const absolutePath = "C:\\Users\\VICTUS\\Desktop\\alanlar.xlsx";
+            
+            try {
+                const response = await fetch('alanlar.xlsx');
+                if (!response.ok) throw new Error("Dosya okunamadı.");
+                
+                const arrayBuffer = await response.arrayBuffer();
+                const data = new Uint8Array(arrayBuffer);
+                
+                parseAndLoadExcelData(data, "alanlar.xlsx (Canlı)");
+                showFloatingNotification("Masaüstündeki 'alanlar.xlsx' dosyası otomatik olarak yüklendi!", "success");
+            } catch (err) {
+                console.log("Güvenlik sınırı veya yerel sunucu eksikliği sebebiyle direkt okunmadı. Sürükle bırak hazır.");
+                
+                const statusEl = document.getElementById('excel-status');
+                if (statusEl) {
+                    statusEl.innerHTML = `
+                        <span class="text-amber-400 font-bold flex items-center justify-center gap-1.5 cursor-help"
+                              title="Dosya Yolu: ${absolutePath}. Tarayıcı kısıtlamasından dolayı sürükleyip bırakabilirsiniz.">
+                            <i class="fa-solid fa-link-slash"></i> Yerel Otomatik Yol Tanımlı
+                        </span>
+                    `;
+                }
+            }
+        }
+
+        // Dynamic Slicers generator based on loaded data — alfabetik sıralı, kaydırılabilir liste
+        // (yüzlerce/binlerce mahalle olabileceği için grid buton yerine tek sütun liste kullanılır)
+        function buildDynamicSlicers() {
+            const container = document.getElementById('mahalle-slicer-container');
+            if (!container) return; // Fail-safe if element doesn't exist
+
+            const mahalleler = [...new Set(raw_dataset.map(item => item.mahalle))]
+                .sort((a, b) => a.localeCompare(b, 'tr'));
+
+            const fragment = document.createDocumentFragment();
+            mahalleler.forEach(m => {
+                const row = document.createElement('button');
+                row.type = 'button';
+                row.className = "mahalle-btn w-full flex items-center gap-2 px-3 py-2 text-[11px] font-medium text-slate-300 hover:bg-[#1A263E] transition text-left";
+                row.dataset.mahalle = m;
+                row.innerHTML = `
+                    <span class="mahalle-check w-4 h-4 rounded border border-[#1F2E4D] flex items-center justify-center flex-shrink-0 transition-colors">
+                        <i class="fa-solid fa-check text-[8px] text-white opacity-0 transition-opacity"></i>
+                    </span>
+                    <span class="mahalle-label truncate flex-1"></span>
+                `;
+                row.querySelector('.mahalle-label').textContent = m; // textContent: mahalle adı Excel'den geldiği için güvenli ekleme
+                row.addEventListener('click', () => toggleMahalle(m));
+                fragment.appendChild(row);
+            });
+
+            container.innerHTML = '';
+            container.appendChild(fragment);
+
+            highlightActiveSlicer();
+        }
+
+        // Setup sliders based on max values in dataset safely
+        function setupSlidersAndRanges() {
+            if (raw_dataset.length === 0) return;
+
+            const maxBina = Math.max(...raw_dataset.map(item => item.bina_sayisi), 150);
+
+            const sliderBinaMin = document.getElementById('bina-slider');
+            const sliderBinaMax = document.getElementById('bina-slider-max');
+            if (sliderBinaMin) sliderBinaMin.max = maxBina;
+            if (sliderBinaMax) {
+                sliderBinaMax.max = maxBina;
+                sliderBinaMax.value = maxBina; // yeni veri geldiğinde aralık tam açık başlar
+            }
+
+            const binaMaxLabel = document.getElementById('bina-max-label');
+            if (binaMaxLabel) binaMaxLabel.innerText = maxBina;
+
+            max_bina = maxBina;
+
+            // Puan aralığı (-130 / 190) kullanıcı isteği üzerine sabit tutulur, dinamik değişmez.
+        }
+
+        // Updated Classification Tiers based on new criteria:
+        // (-130 ve -30), (-30 ve 0), (0 ve 30), (30 ve 45), (45 ve 60), (60 ve 190)
+        function getScoreColor(score) {
+            if (score >= 60) return '#10B981';  // Harika (Emerald)
+            if (score >= 45) return '#22D3EE';  // Çok İyi (Cyan)
+            if (score >= 30) return '#3B82F6';  // İyi (Blue)
+            if (score >= 0)  return '#F59E0B';  // Orta (Amber)
+            if (score >= -30) return '#F43F5E'; // Kötü (Rose)
+            return '#9F1239';                   // Kritik (Dark Rose)
+        }
+
+        function toggleMahalle(mahalle) {
+            if (mahalle === 'ALL') {
+                // "Tümü" seçilirse diğer tüm seçimler temizlenir
+                active_mahalles.clear();
+            } else if (active_mahalles.has(mahalle)) {
+                // Zaten seçiliyse tekrar tıklanınca seçim kaldırılır
+                active_mahalles.delete(mahalle);
+            } else {
+                active_mahalles.add(mahalle);
+            }
+            highlightActiveSlicer();
+            current_page = 1;
+            filterData();
+        }
+
+        function highlightActiveSlicer() {
+            const container = document.getElementById('mahalle-slicer-container');
+            if (container) {
+                container.querySelectorAll('.mahalle-btn').forEach(row => {
+                    const isActive = active_mahalles.has(row.dataset.mahalle);
+                    const checkEl = row.querySelector('.mahalle-check');
+                    const checkIcon = checkEl ? checkEl.querySelector('i') : null;
+
+                    row.classList.toggle('bg-cyan-600/20', isActive);
+                    row.classList.toggle('text-white', isActive);
+                    row.classList.toggle('font-bold', isActive);
+                    row.classList.toggle('text-slate-300', !isActive);
+                    row.classList.toggle('font-medium', !isActive);
+
+                    if (checkEl) {
+                        checkEl.classList.toggle('bg-cyan-500', isActive);
+                        checkEl.classList.toggle('border-cyan-500', isActive);
+                    }
+                    if (checkIcon) checkIcon.classList.toggle('opacity-0', !isActive);
+                });
+            }
+
+            const clearAllBtn = document.getElementById('mahalle-clear-all-btn');
+            if (clearAllBtn) clearAllBtn.classList.toggle('hidden', active_mahalles.size === 0);
+
+            renderSelectedMahalleChips();
+        }
+
+        // Arama kutusunun altında, seçili mahalleleri kaldırılabilir etiketler olarak gösterir
+        function renderSelectedMahalleChips() {
+            const container = document.getElementById('selected-mahalle-chips');
+            if (!container) return;
+
+            if (active_mahalles.size === 0) {
+                container.innerHTML = '';
+                container.classList.add('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            container.innerHTML = '';
+
+            const fragment = document.createDocumentFragment();
+            Array.from(active_mahalles).sort((a, b) => a.localeCompare(b, 'tr')).forEach(m => {
+                const chip = document.createElement('span');
+                chip.className = "inline-flex items-center gap-1.5 bg-cyan-600/15 border border-cyan-500/30 text-cyan-300 text-[11px] font-semibold pl-2.5 pr-1.5 py-1 rounded-full max-w-full";
+
+                const label = document.createElement('span');
+                label.className = "truncate max-w-[130px]";
+                label.textContent = m;
+                chip.appendChild(label);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = "w-4 h-4 rounded-full flex items-center justify-center hover:bg-cyan-500/30 transition text-cyan-200 flex-shrink-0";
+                removeBtn.innerHTML = '<i class="fa-solid fa-xmark text-[9px]"></i>';
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleMahalle(m);
+                });
+                chip.appendChild(removeBtn);
+
+                fragment.appendChild(chip);
+            });
+
+            container.appendChild(fragment);
+        }
+
+        // Çift uçlu (min/max) sliderlar: aynı anda hem alttan hem üstten daraltılabilir.
+        // Üst üste bindiklerinde (min > max olmaya çalışırsa) hangi thumb sürükleniyorsa
+        // diğeri onunla eşitlenir — böylece aralık ters dönmez, en fazla sıfır genişliğe iner.
+        function updateSliders() {
+            const sliderBinaMin = document.getElementById('bina-slider');
+            const sliderBinaMax = document.getElementById('bina-slider-max');
+            const sliderPuanMin = document.getElementById('puan-slider');
+            const sliderPuanMax = document.getElementById('puan-slider-max');
+
+            let binaMinVal = sliderBinaMin ? parseInt(sliderBinaMin.value) : 0;
+            let binaMaxVal = sliderBinaMax ? parseInt(sliderBinaMax.value) : max_bina;
+            if (binaMinVal > binaMaxVal) {
+                if (document.activeElement === sliderBinaMax) {
+                    binaMinVal = binaMaxVal;
+                    if (sliderBinaMin) sliderBinaMin.value = binaMinVal;
+                } else {
+                    binaMaxVal = binaMinVal;
+                    if (sliderBinaMax) sliderBinaMax.value = binaMaxVal;
+                }
+            }
+
+            let puanMinVal = sliderPuanMin ? parseInt(sliderPuanMin.value) : -130;
+            let puanMaxVal = sliderPuanMax ? parseInt(sliderPuanMax.value) : 190;
+            if (puanMinVal > puanMaxVal) {
+                if (document.activeElement === sliderPuanMax) {
+                    puanMinVal = puanMaxVal;
+                    if (sliderPuanMin) sliderPuanMin.value = puanMinVal;
+                } else {
+                    puanMaxVal = puanMinVal;
+                    if (sliderPuanMax) sliderPuanMax.value = puanMaxVal;
+                }
+            }
+
+            min_bina = binaMinVal;
+            max_bina = binaMaxVal;
+            min_puan = puanMinVal;
+            max_puan = puanMaxVal;
+
+            const binaVal = document.getElementById('bina-val');
+            if (binaVal) binaVal.innerText = binaMinVal;
+            const binaMaxValEl = document.getElementById('bina-max-val');
+            if (binaMaxValEl) binaMaxValEl.innerText = binaMaxVal;
+
+            const puanVal = document.getElementById('puan-val');
+            if (puanVal) puanVal.innerText = puanMinVal;
+            const puanMaxValEl = document.getElementById('puan-max-val');
+            if (puanMaxValEl) puanMaxValEl.innerText = puanMaxVal;
+
+            current_page = 1;
+            filterData();
+        }
+
+        // Bir dual-range grubundaki iki input'tan hangisi sürükleniyorsa onu öne (üst z-index)
+        // getirir; thumb'lar tam üst üste bindiğinde doğru olanın yakalanmasını sağlar.
+        function bindDualRangeStacking(minInput, maxInput) {
+            if (!minInput || !maxInput) return;
+            minInput.addEventListener('pointerdown', () => {
+                minInput.style.zIndex = 3;
+                maxInput.style.zIndex = 2;
+            });
+            maxInput.addEventListener('pointerdown', () => {
+                maxInput.style.zIndex = 3;
+                minInput.style.zIndex = 2;
+            });
+        }
+
+        function resetFilters() {
+            active_mahalles.clear();
+            min_bina = 0;
+            max_bina = parseInt(document.getElementById('bina-slider-max')?.max) || 150;
+            min_puan = -130;
+            max_puan = 190;
+
+            // Safe UI Reset
+            const binaSlider = document.getElementById('bina-slider');
+            if(binaSlider) binaSlider.value = 0;
+
+            const binaSliderMax = document.getElementById('bina-slider-max');
+            if(binaSliderMax) binaSliderMax.value = max_bina;
+
+            const puanSlider = document.getElementById('puan-slider');
+            if(puanSlider) puanSlider.value = min_puan;
+
+            const puanSliderMax = document.getElementById('puan-slider-max');
+            if(puanSliderMax) puanSliderMax.value = max_puan;
+
+            const searchInput = document.getElementById('search-input');
+            if(searchInput) searchInput.value = "";
+
+            const densitySelect = document.getElementById('density-select');
+            if(densitySelect) densitySelect.value = "ALL";
+
+            const qualitySelect = document.getElementById('quality-select');
+            if(qualitySelect) qualitySelect.value = "ALL";
+
+            const binaVal = document.getElementById('bina-val');
+            if(binaVal) binaVal.innerText = "0";
+
+            const binaMaxValEl = document.getElementById('bina-max-val');
+            if(binaMaxValEl) binaMaxValEl.innerText = max_bina;
+
+            const puanVal = document.getElementById('puan-val');
+            if(puanVal) puanVal.innerText = min_puan;
+
+            const puanMaxValEl = document.getElementById('puan-max-val');
+            if(puanMaxValEl) puanMaxValEl.innerText = max_puan;
+
+            highlightActiveSlicer();
+            current_page = 1;
+            filterData();
+        }
+
+        function filterData() {
+            // Null-safe reads for HTML elements
+            const searchInputEl = document.getElementById('search-input');
+            const searchQuery = searchInputEl ? searchInputEl.value.toLowerCase() : '';
+            
+            const densitySelectEl = document.getElementById('density-select');
+            const densityFilter = densitySelectEl ? densitySelectEl.value : 'ALL';
+
+            const qualitySelectEl = document.getElementById('quality-select');
+            const qualityFilter = qualitySelectEl ? qualitySelectEl.value : 'ALL';
+
+            const filtered = raw_dataset.filter(item => {
+                // Neighborhood (multi-select — empty set means "Tümü")
+                if (active_mahalles.size > 0 && !active_mahalles.has(item.mahalle)) return false;
+
+                // Sliders (çift uçlu: hem alt hem üst sınır)
+                if (item.bina_sayisi < min_bina || item.bina_sayisi > max_bina) return false;
+                if (item.puan_ortalama < min_puan || item.puan_ortalama > max_puan) return false;
+
+                // Density class
+                if (densityFilter === 'HIGH' && item.bina_sayisi <= 50) return false;
+                if (densityFilter === 'MEDIUM' && (item.bina_sayisi > 50 || item.bina_sayisi < 20)) return false;
+                if (densityFilter === 'LOW' && item.bina_sayisi >= 20) return false;
+
+                // Quality scale (score tiers)
+                if (qualityFilter === 'HARIKA' && item.puan_ortalama < 60) return false;
+                if (qualityFilter === 'COK_IYI' && (item.puan_ortalama < 45 || item.puan_ortalama >= 60)) return false;
+                if (qualityFilter === 'IYI' && (item.puan_ortalama < 30 || item.puan_ortalama >= 45)) return false;
+                if (qualityFilter === 'ORTA' && (item.puan_ortalama < 0 || item.puan_ortalama >= 30)) return false;
+                if (qualityFilter === 'KOTU' && (item.puan_ortalama < -30 || item.puan_ortalama >= 0)) return false;
+                if (qualityFilter === 'KRITIK' && item.puan_ortalama >= -30) return false;
+
+                // Query search (OBJECTID artık "K-ATA-0001" gibi alfanümerik olabildiği için
+                // karşılaştırma büyük/küçük harften bağımsız yapılır)
+                if (searchQuery) {
+                    const idLower = item.OBJECTID.toLowerCase();
+                    const matchID = ("id " + idLower).includes(searchQuery) || idLower === searchQuery;
+                    const matchMahalle = item.mahalle.toLowerCase().includes(searchQuery);
+                    if (!matchID && !matchMahalle) return false;
+                }
+
+                return true;
+            });
+
+            last_filtered_data = filtered;
+
+            updateKPIs(filtered);
+            updateMap(filtered);
+            updateCharts(filtered);
+            renderTableWithPagination(filtered);
+
+            // Keep an already-open KPI detail panel in sync with the active filters
+            if (activeKpiDetail) {
+                renderKpiDetailChart(activeKpiDetail);
+            }
+        }
+
+        // Recalculating KPI Cards
+        function updateKPIs(data) {
+            const parselCount = data.length;
+            const totalBina = data.reduce((sum, item) => sum + item.bina_sayisi, 0);
+            const totalAlanM2 = data.reduce((sum, item) => sum + item.Shape_Area, 0);
+            const totalAlanHektar = totalAlanM2 / 10000;
+
+            let weightedScore = 0;
+            if (totalBina > 0) {
+                weightedScore = data.reduce((sum, item) => sum + (item.puan_ortalama * item.bina_sayisi), 0) / totalBina;
+            }
+
+            document.getElementById('kpi-parsel').innerText = parselCount.toLocaleString('tr-TR');
+            document.getElementById('kpi-bina').innerText = totalBina.toLocaleString('tr-TR');
+            document.getElementById('kpi-alan').innerText = totalAlanHektar.toFixed(2);
+            document.getElementById('kpi-puan').innerText = weightedScore.toFixed(2);
+        }
+
+        // CSS Grid Map (Responsive, Scrollable HTML)
+        function updateMap(data) {
+            const mapContainer = document.getElementById('interactive-map');
+            if(!mapContainer) return;
+            
+            mapContainer.innerHTML = ''; 
+
+            if (data.length === 0) {
+                mapContainer.innerHTML = `<div class="col-span-full text-center text-slate-500 mt-10 font-medium w-full">Uygulanmış filtrelere uygun imar adası bulunamadı.</div>`;
+                return;
+            }
+
+            data.forEach((item) => {
+                const box = document.createElement('div');
+                const bgColor = getScoreColor(item.puan_ortalama);
+                
+                // Box Styling — id üstte, mahalle adı bir alt satırda, ikisi de ortalı
+                box.className = "h-[55px] rounded-lg border flex flex-col items-center justify-center cursor-pointer transition-all duration-200 shadow-sm relative overflow-hidden group px-1";
+                box.style.backgroundColor = bgColor + 'CC'; // 80% opacity hex
+                box.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+
+                // Content inside Box (textContent kullanılır: mahalle adı Excel'den geldiği için güvenli ekleme)
+                box.innerHTML = `
+                    <span class="map-box-id text-white font-bold text-[10px] z-10 leading-tight text-center truncate max-w-full"></span>
+                    <span class="map-box-mahalle text-white/80 font-medium text-[9px] z-10 leading-tight text-center truncate max-w-full"></span>
+                    <div class="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition duration-200"></div>
+                `;
+                box.querySelector('.map-box-id').textContent = item.OBJECTID;
+                box.querySelector('.map-box-mahalle').textContent = item.mahalle;
+
+                // Hover interactions (mouseenter/mouseleave — do not re-fire when moving between
+                // the box's own inner elements, unlike mouseover/mouseout which was restarting the
+                // open animation mid-flight and making it look instant)
+                box.addEventListener('mouseenter', () => {
+                    box.style.backgroundColor = bgColor; // 100% opacity
+                    box.style.borderColor = 'rgba(255, 255, 255, 0.8)';
+                    box.style.transform = 'translateY(-2px)';
+                    showMapHover(box, item);
+                });
+
+                box.addEventListener('mouseleave', () => {
+                    box.style.backgroundColor = bgColor + 'CC';
+                    box.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                    box.style.transform = 'translateY(0)';
+                    hideMapHover();
+                });
+
+                mapContainer.appendChild(box);
+            });
+        }
+
+        function showMapHover(box, item) {
+            const hoverBox = document.getElementById('map-hover-info');
+            const mapContainer = document.getElementById('interactive-map');
+            if(!hoverBox || !mapContainer) return;
+
+            hoverBox.innerHTML = `
+                <div class="font-bold text-white border-b border-[#1A263E] pb-1.5 mb-2 flex items-center gap-1.5">
+                    <i class="fa-solid fa-circle-info text-cyan-400"></i> Parsel Künyesi: ID ${item.OBJECTID}
+                </div>
+                <div class="space-y-1.5 text-slate-300 text-[11px]">
+                    <div class="flex justify-between"><span>Mahalle:</span> <strong class="text-white">${item.mahalle}</strong></div>
+                    <div class="flex justify-between"><span>Bina Sayısı:</span> <strong class="text-cyan-400">${item.bina_sayisi} Yapı</strong></div>
+                    <div class="flex justify-between"><span>Alan:</span> <strong class="text-slate-100">${item.Shape_Area.toLocaleString('tr-TR')} m²</strong></div>
+                    <div class="flex justify-between"><span>Puan Ortalama:</span> <strong class="text-amber-400">${item.puan_ortalama.toFixed(2)}</strong></div>
+                    <div class="flex justify-between"><span>Puan Sapma:</span> <strong class="text-violet-400">± ${item.puan_std_sapma.toFixed(2)}</strong></div>
+                </div>
+            `;
+
+            // map-hover-info is a SIBLING of interactive-map (not a child of it), so its
+            // top/left must be expressed in its own offsetParent's coordinate space — not
+            // interactive-map's. Using getBoundingClientRect() for everything sidesteps that
+            // mismatch entirely (it already reflects the current scroll position of the
+            // scrollable map, whatever ancestor happens to be positioning the tooltip) and is
+            // what was causing the tooltip to render clipped/off-screen for rows in the middle
+            // or near the bottom of the scrolled list.
+            const anchor = hoverBox.offsetParent || document.body;
+            const anchorRect = anchor.getBoundingClientRect();
+            const boxRect = box.getBoundingClientRect();
+            const mapRect = mapContainer.getBoundingClientRect(); // visible (already-clipped) map viewport
+
+            hoverBox.style.left = '0px';
+            hoverBox.style.top = '0px';
+            const tooltipHeight = hoverBox.offsetHeight;
+            const tooltipWidth = hoverBox.offsetWidth;
+
+            const margin = 10;
+            const spaceAbove = boxRect.top - mapRect.top;
+            const spaceBelow = mapRect.bottom - boxRect.bottom;
+
+            const openDownward = spaceAbove < (tooltipHeight + margin) && spaceBelow >= spaceAbove;
+
+            let viewportTop = openDownward ? (boxRect.bottom + margin) : (boxRect.top - tooltipHeight - margin);
+            let viewportLeft = boxRect.left + boxRect.width / 2 - tooltipWidth / 2;
+
+            // Clamp to the visible (already scroll-clipped) map viewport so the tooltip is
+            // never rendered above/below what's currently scrolled into view.
+            const minViewportTop = mapRect.top + 4;
+            const maxViewportTop = mapRect.bottom - tooltipHeight - 4;
+            if (viewportTop < minViewportTop) viewportTop = minViewportTop;
+            if (viewportTop > maxViewportTop) viewportTop = Math.max(maxViewportTop, minViewportTop);
+
+            const minViewportLeft = mapRect.left + 4;
+            const maxViewportLeft = mapRect.right - tooltipWidth - 4;
+            if (viewportLeft < minViewportLeft) viewportLeft = minViewportLeft;
+            if (viewportLeft > maxViewportLeft) viewportLeft = Math.max(maxViewportLeft, minViewportLeft);
+
+            // Translate from viewport pixels into the tooltip's actual positioning ancestor
+            const targetTop = viewportTop - anchorRect.top;
+            const targetLeft = viewportLeft - anchorRect.left;
+
+            // Start slightly offset from the resting position, then animate in (slide + fade).
+            // Forcing a synchronous reflow (offsetHeight read) between the "start" and "end"
+            // styles is what actually makes the browser animate the transition, rather than
+            // collapsing both style changes into a single paint.
+            hoverBox.style.transition = 'none';
+            hoverBox.style.left = targetLeft + 'px';
+            hoverBox.style.top = (openDownward ? targetTop - 8 : targetTop + 8) + 'px';
+            hoverBox.style.opacity = '0';
+
+            void hoverBox.offsetHeight; // force reflow
+
+            hoverBox.style.transition = 'top 0.25s ease-out, opacity 0.25s ease-out';
+            hoverBox.style.top = targetTop + 'px';
+            hoverBox.style.opacity = '1';
+        }
+
+        function hideMapHover() {
+            const hoverBox = document.getElementById('map-hover-info');
+            if(hoverBox) hoverBox.style.opacity = '0';
+        }
+
+        function initCharts() {
+            const ctx1El = document.getElementById('score-density-chart');
+            if(ctx1El) {
+                const ctx1 = ctx1El.getContext('2d');
+                densityChart = new Chart(ctx1, {
+                    type: 'bar',
+                    data: {
+                        labels: [],
+                        datasets: [
+                            {
+                                label: 'Bina Yoğunluğu',
+                                data: [],
+                                backgroundColor: 'rgba(59, 130, 246, 0.45)',
+                                borderColor: '#3B82F6',
+                                borderWidth: 1.5,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Puan Ortalaması',
+                                type: 'line',
+                                data: [],
+                                borderColor: '#F59E0B',
+                                backgroundColor: 'transparent',
+                                borderWidth: 2,
+                                tension: 0.3,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { labels: { color: '#94A3B8', font: { size: 10 } } }
+                        },
+                        scales: {
+                            x: { grid: { color: 'rgba(255, 255, 255, 0.03)' }, ticks: { color: '#94A3B8', font: { size: 9 } } },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                ticks: { color: '#3B82F6', font: { size: 9 } }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                grid: { drawOnChartArea: false },
+                                ticks: { color: '#F59E0B', font: { size: 9 } }
+                            }
+                        }
+                    }
+                });
+            }
+
+            const ctx2El = document.getElementById('distribution-pie-chart');
+            if(ctx2El) {
+                const ctx2 = ctx2El.getContext('2d');
+                pieChart = new Chart(ctx2, {
+                    type: 'doughnut',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            data: [],
+                            // Top 10 mahalle + "Diğer" = en fazla 11 dilim, palet buna göre sabit
+                            backgroundColor: ['#06B6D4', '#6366F1', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#F43F5E', '#22D3EE', '#84CC16', '#F97316', '#475569'],
+                            borderColor: '#0A0E17',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 10 } },
+                            tooltip: {
+                                callbacks: {
+                                    label: (c) => {
+                                        const total = c.dataset.data.reduce((a, b) => a + b, 0);
+                                        const pct = total > 0 ? ((c.raw / total) * 100).toFixed(1) : '0.0';
+                                        return ` ${c.label}: ${c.raw.toFixed(2)} Hektar (${pct}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function updateCharts(data) {
+            if (!densityChart || !pieChart) return;
+
+            const sorted = [...data].sort((a,b) => b.bina_sayisi - a.bina_sayisi).slice(0, 50);
+
+            densityChart.data.labels = sorted.map(item => `ID ${item.OBJECTID}`);
+            densityChart.data.datasets[0].data = sorted.map(item => item.bina_sayisi);
+            densityChart.data.datasets[1].data = sorted.map(item => item.puan_ortalama);
+            densityChart.update();
+
+            renderDistributionPieChart(data);
+        }
+
+        // Mahalleye göre toplam alan (Hektar); binlerce mahalle olabileceğinden en büyük 10
+        // mahalle gösterilir, kalanı "Diğer" dilimine toplanır (aksi halde 1000 dilime bölünürdü)
+        function renderDistributionPieChart(data) {
+            const mahalleAreas = {};
+            data.forEach(item => {
+                mahalleAreas[item.mahalle] = (mahalleAreas[item.mahalle] || 0) + item.Shape_Area;
+            });
+
+            const sortedEntries = Object.entries(mahalleAreas).sort((a, b) => b[1] - a[1]);
+            const topEntries = sortedEntries.slice(0, 10);
+            const restEntries = sortedEntries.slice(10);
+
+            const labels = topEntries.map(e => e[0]);
+            const values = topEntries.map(e => e[1] / 10000); // Hektar
+
+            if (restEntries.length > 0) {
+                const restSum = restEntries.reduce((s, e) => s + e[1], 0) / 10000;
+                labels.push(`Diğer (${restEntries.length} Mahalle)`);
+                values.push(restSum);
+            }
+
+            pieChart.data.labels = labels;
+            pieChart.data.datasets[0].data = values;
+            pieChart.update();
+        }
+
+        // ---- KPI Detail Expansion Panel ----
+
+        const KPI_DETAIL_PALETTE = ['#06B6D4', '#6366F1', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#F43F5E', '#22D3EE', '#84CC16', '#F97316'];
+
+        function toggleKpiDetail(type) {
+            const panel = document.getElementById('kpi-detail-panel');
+            if (activeKpiDetail === type && !panel.classList.contains('hidden')) {
+                closeKpiDetail();
+                return;
+            }
+            activeKpiDetail = type;
+            panel.classList.remove('hidden');
+            renderKpiDetailChart(type);
+        }
+
+        function closeKpiDetail() {
+            const panel = document.getElementById('kpi-detail-panel');
+            if (panel) panel.classList.add('hidden');
+            activeKpiDetail = null;
+        }
+
+        function renderKpiDetailChart(type) {
+            const titleEl = document.getElementById('kpi-detail-title-text');
+            const ctxEl = document.getElementById('kpi-detail-chart');
+            if (!ctxEl) return;
+            const ctx = ctxEl.getContext('2d');
+
+            if (kpiDetailChart) {
+                kpiDetailChart.destroy();
+                kpiDetailChart = null;
+            }
+
+            // Reset the scrollable wrapper width; only the vertical score-split chart grows it
+            const innerEl = document.getElementById('kpi-detail-chart-inner');
+            if (innerEl) innerEl.style.width = '100%';
+
+            const data = last_filtered_data;
+
+            if (type === 'parsel') {
+                titleEl.innerText = 'Mahallelere Göre Aktif İmar Adası Sayısı';
+                const counts = {};
+                data.forEach(item => counts[item.mahalle] = (counts[item.mahalle] || 0) + 1);
+                kpiDetailChart = buildHorizontalStackedBar(ctx, counts, 'İmar Adası');
+            } else if (type === 'bina') {
+                titleEl.innerText = 'Mahallelere Göre Toplam Yapı Stoğu';
+                const counts = {};
+                data.forEach(item => counts[item.mahalle] = (counts[item.mahalle] || 0) + item.bina_sayisi);
+                kpiDetailChart = buildHorizontalStackedBar(ctx, counts, 'Bina');
+            } else if (type === 'alan') {
+                titleEl.innerText = 'Mahallelere Göre Toplam İmar Planlama Alanı (Hektar)';
+                const counts = {};
+                data.forEach(item => counts[item.mahalle] = (counts[item.mahalle] || 0) + (item.Shape_Area / 10000));
+                kpiDetailChart = buildHorizontalStackedBar(ctx, counts, 'Hektar', 2);
+            } else if (type === 'puan') {
+                titleEl.innerText = 'Genel Hizmet Skoru ve Mahalle Kırılımı';
+                kpiDetailChart = buildScoreSplitChart(ctx, data);
+            }
+        }
+
+        // Tek bir yatay bar, mahallelere göre segmentlere ayrılmış (stacked) şekilde oranı gösterir
+        function buildHorizontalStackedBar(ctx, countsObj, unitLabel, decimals = 0) {
+            const labels = Object.keys(countsObj);
+
+            if (labels.length === 0) {
+                return new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels: [unitLabel], datasets: [] },
+                    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false }
+                });
+            }
+
+            const datasets = labels.map((mahalle, i) => ({
+                label: mahalle,
+                data: [countsObj[mahalle]],
+                backgroundColor: KPI_DETAIL_PALETTE[i % KPI_DETAIL_PALETTE.length],
+                borderRadius: 4,
+                barThickness: 60
+            }));
+
+            return new Chart(ctx, {
+                type: 'bar',
+                data: { labels: [unitLabel], datasets },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 10 } },
+                        tooltip: {
+                            callbacks: {
+                                label: (c) => ` ${c.dataset.label}: ${c.raw.toFixed(decimals)} ${unitLabel}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { stacked: true, grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94A3B8', font: { size: 9 } } },
+                        y: { stacked: true, grid: { display: false }, ticks: { color: '#94A3B8', font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        // Solda genel ağırlıklı hizmet skoru, sağında mahallelere bölünmüş skorlar.
+        // Dikey bar olarak çizilir; mahalle sayısı arttıkça grafik yana doğru genişler ve
+        // sarmalayıcı (kpi-detail-chart-inner) yatay kaydırma ile taşan kısmı gösterir.
+        function buildScoreSplitChart(ctx, data) {
+            const mahalleGroups = {};
+            data.forEach(item => {
+                if (!mahalleGroups[item.mahalle]) mahalleGroups[item.mahalle] = { totalScore: 0, totalBina: 0 };
+                mahalleGroups[item.mahalle].totalScore += item.puan_ortalama * item.bina_sayisi;
+                mahalleGroups[item.mahalle].totalBina += item.bina_sayisi;
+            });
+
+            const totalBinaAll = data.reduce((s, i) => s + i.bina_sayisi, 0);
+            const overallScore = totalBinaAll > 0 ? data.reduce((s, i) => s + i.puan_ortalama * i.bina_sayisi, 0) / totalBinaAll : 0;
+
+            const mahalleLabels = Object.keys(mahalleGroups);
+            const mahalleScores = mahalleLabels.map(m => mahalleGroups[m].totalBina > 0 ? mahalleGroups[m].totalScore / mahalleGroups[m].totalBina : 0);
+
+            const labels = ['Genel Skor', ...mahalleLabels];
+            const scores = [overallScore, ...mahalleScores];
+            const colors = scores.map(s => getScoreColor(s));
+            colors[0] = '#94A3B8'; // Genel skor nötr renkle diğerlerinden ayrılır
+
+            // Mahalle sayısı arttıkça kategori başına sabit bir genişlik ayır; sığmıyorsa
+            // sarmalayıcı genişler ve konteyner yatay kaydırılabilir hale gelir.
+            const innerEl = document.getElementById('kpi-detail-chart-inner');
+            if (innerEl) {
+                const minWidthPerBar = 90;
+                const neededWidth = labels.length * minWidthPerBar;
+                const containerWidth = innerEl.parentElement ? innerEl.parentElement.clientWidth : 0;
+                innerEl.style.width = neededWidth > containerWidth ? neededWidth + 'px' : '100%';
+            }
+
+            return new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Hizmet Skoru',
+                        data: scores,
+                        backgroundColor: colors,
+                        borderRadius: 4,
+                        maxBarThickness: 48
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: (c) => ` Skor: ${c.raw.toFixed(2)}` } }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#94A3B8', font: { size: 10 } } },
+                        y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94A3B8', font: { size: 9 } } }
+                    }
+                }
+            });
+        }
+
+        function handleSort(columnName) {
+            if (active_sort_column === columnName) {
+                active_sort_direction = active_sort_direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                active_sort_column = columnName;
+                active_sort_direction = 'asc';
+            }
+
+            updateSortArrows();
+            filterData();
+        }
+
+        function updateSortArrows() {
+            const columns = ['OBJECTID', 'ilce', 'mahalle', 'bina_sayisi', 'Shape_Area', 'puan_ortalama', 'puan_std_sapma', 'puan_range'];
+            columns.forEach(col => {
+                const icon = document.getElementById(`sort-icon-${col}`);
+                if (icon) {
+                    if (col === active_sort_column) {
+                        icon.className = active_sort_direction === 'asc' ? 'fa-solid fa-sort-up ml-1 text-cyan-400' : 'fa-solid fa-sort-down ml-1 text-cyan-400';
+                    } else {
+                        icon.className = 'fa-solid fa-sort ml-1 text-slate-600 text-[10px]';
+                    }
+                }
+            });
+
+            const sortLabelEl = document.getElementById('active-sort-label');
+            if(sortLabelEl) {
+                const dirText = active_sort_direction === 'asc' ? 'Artan' : 'Azalan';
+                sortLabelEl.innerText = `Sıralama: ${active_sort_column} (${dirText})`;
+            }
+        }
+
+        function renderTableWithPagination(data) {
+            const tableBody = document.getElementById('table-body');
+            if(!tableBody) return;
+            
+            tableBody.innerHTML = '';
+
+            const sortedData = [...data].sort((a, b) => {
+                let valA = a[active_sort_column];
+                let valB = b[active_sort_column];
+
+                if (typeof valA === 'string') {
+                    return active_sort_direction === 'asc' 
+                        ? valA.localeCompare(valB, 'tr') 
+                        : valB.localeCompare(valA, 'tr');
+                } else {
+                    return active_sort_direction === 'asc' ? valA - valB : valB - valA;
+                }
+            });
+
+            const countEl = document.getElementById('table-record-count');
+            if(countEl) countEl.innerText = sortedData.length;
+
+            if (sortedData.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="p-8 text-center text-slate-500">
+                            <i class="fa-solid fa-folder-open text-3xl mb-2.5 block"></i> Filtrelere uyan hiçbir imar adası bulunamadı.
+                        </td>
+                    </tr>
+                `;
+                const pagBtns = document.getElementById('pagination-buttons');
+                if(pagBtns) pagBtns.innerHTML = '';
+                document.getElementById('pag-start').innerText = '0';
+                document.getElementById('pag-end').innerText = '0';
+                document.getElementById('pag-total').innerText = '0';
+                return;
+            }
+
+            const totalRecords = sortedData.length;
+            const totalPages = Math.ceil(totalRecords / page_size);
+            
+            if (current_page > totalPages) current_page = totalPages;
+            if (current_page < 1) current_page = 1;
+
+            const startIndex = (current_page - 1) * page_size;
+            const endIndex = Math.min(startIndex + page_size, totalRecords);
+
+            const pageData = sortedData.slice(startIndex, endIndex);
+
+            pageData.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-[#111827]/80 transition border-b border-[#152035]";
+
+                // New Classification Status Badges based on score
+                let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-[#F59E0B]/10 text-[#F59E0B] border border-[#F59E0B]/20 font-medium">Orta Kalite</span>';
+                if (item.puan_ortalama >= 60) {
+                    statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/20 font-medium">Harika</span>';
+                } else if (item.puan_ortalama >= 45) {
+                    statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-[#22D3EE]/10 text-[#22D3EE] border border-[#22D3EE]/20 font-medium">Çok İyi</span>';
+                } else if (item.puan_ortalama >= 30) {
+                    statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/20 font-medium">İyi Plan</span>';
+                } else if (item.puan_ortalama < -30) {
+                    statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-[#9F1239]/10 text-[#9F1239] border border-[#9F1239]/20 font-medium">Kritik Risk</span>';
+                } else if (item.puan_ortalama < 0) {
+                    statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-[#F43F5E]/10 text-[#F43F5E] border border-[#F43F5E]/20 font-medium">Kötü/Riskli</span>';
+                }
+
+                tr.innerHTML = `
+                    <td class="p-3.5 text-center font-bold text-slate-300">${item.OBJECTID}</td>
+                    <td class="p-3.5 text-slate-400">${item.ilce}</td>
+                    <td class="p-3.5 text-slate-100 font-medium">${item.mahalle}</td>
+                    <td class="p-3.5 text-right text-cyan-400 font-semibold">${item.bina_sayisi}</td>
+                    <td class="p-3.5 text-right text-slate-300">${item.Shape_Area.toLocaleString('tr-TR')}</td>
+                    <td class="p-3.5 text-right font-bold" style="color: ${getScoreColor(item.puan_ortalama)}">${item.puan_ortalama.toFixed(2)}</td>
+                    <td class="p-3.5 text-right text-slate-400">${item.puan_std_sapma.toFixed(2)}</td>
+                    <td class="p-3.5 text-right text-slate-400">${item.puan_min} / ${item.puan_max} (${item.puan_range})</td>
+                    <td class="p-3.5 text-center">${statusBadge}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+            document.getElementById('pag-start').innerText = (startIndex + 1).toString();
+            document.getElementById('pag-end').innerText = endIndex.toString();
+            document.getElementById('pag-total').innerText = totalRecords.toString();
+
+            renderPaginationControls(totalPages);
+        }
+
+        function renderPaginationControls(totalPages) {
+            const container = document.getElementById('pagination-buttons');
+            if(!container) return;
+            
+            container.innerHTML = '';
+
+            const prevBtn = document.createElement('button');
+            prevBtn.className = "px-2.5 py-1.5 rounded-lg bg-[#111827] border border-[#1F2E4D] text-slate-400 hover:text-white transition text-xs " + (current_page === 1 ? 'opacity-40 cursor-not-allowed' : '');
+            prevBtn.innerHTML = '<i class="fa-solid fa-angle-left"></i> Geri';
+            prevBtn.onclick = () => {
+                if (current_page > 1) {
+                    current_page--;
+                    filterData();
+                }
+            };
+            container.appendChild(prevBtn);
+
+            let startPage = Math.max(1, current_page - 2);
+            let endPage = Math.min(totalPages, startPage + 4);
+            if (endPage - startPage < 4) {
+                startPage = Math.max(1, endPage - 4);
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                const pageBtn = document.createElement('button');
+                pageBtn.className = `w-8 h-8 rounded-lg text-xs font-bold transition ${i === current_page ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/25' : 'bg-[#111827] border border-[#1F2E4D] text-slate-400 hover:text-white'}`;
+                pageBtn.innerText = i;
+                pageBtn.onclick = () => {
+                    current_page = i;
+                    filterData();
+                };
+                container.appendChild(pageBtn);
+            }
+
+            const nextBtn = document.createElement('button');
+            nextBtn.className = "px-2.5 py-1.5 rounded-lg bg-[#111827] border border-[#1F2E4D] text-slate-400 hover:text-white transition text-xs " + (current_page === totalPages ? 'opacity-40 cursor-not-allowed' : '');
+            nextBtn.innerHTML = 'İleri <i class="fa-solid fa-angle-right"></i>';
+            nextBtn.onclick = () => {
+                if (current_page < totalPages) {
+                    current_page++;
+                    filterData();
+                }
+            };
+            container.appendChild(nextBtn);
+        }
+
+        function showFloatingNotification(message, type) {
+            const existing = document.getElementById('floating-toast');
+            if (existing) existing.remove();
+
+            const toast = document.createElement('div');
+            toast.id = 'floating-toast';
+            const colorClass = type === 'success' ? 'border-emerald-500 bg-emerald-950/95 text-emerald-200' : 'border-rose-500 bg-rose-950/95 text-rose-200';
+            const icon = type === 'success' ? 'fa-circle-check text-emerald-400' : 'fa-triangle-exclamation text-rose-400';
+
+            toast.className = `fixed bottom-6 right-6 border p-4 rounded-xl shadow-2xl flex items-center gap-3 z-[9999] max-w-sm transition-all duration-300 transform translate-y-10 opacity-0 ${colorClass}`;
+            toast.innerHTML = `
+                <i class="fa-solid ${icon} text-lg"></i>
+                <div class="text-xs font-semibold">${message}</div>
+            `;
+            document.body.appendChild(toast);
+
+            setTimeout(() => { toast.classList.remove('translate-y-10', 'opacity-0'); }, 50);
+
+            setTimeout(() => {
+                toast.classList.add('translate-y-10', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // Tek, sabit format: noktalı virgül ayraç, noktalı ondalık, binlik ayracı hiç yok.
+        function formatCsvValue(val) {
+            if (typeof val === 'string') return `"${val}"`;
+            if (typeof val === 'number') {
+                if (Number.isInteger(val)) return String(val);
+                return val.toFixed(3);
+            }
+            return val;
+        }
+
+        function exportToCSV() {
+            if(raw_dataset.length === 0) {
+                showFloatingNotification("Dışa aktarılacak veri bulunamadı. Lütfen önce Excel yükleyin.", "error");
+                return;
+            }
+
+            if (last_filtered_data.length === 0) {
+                showFloatingNotification("Filtreye uygun veri bulunamadı. Filtreleri gözden geçirin.", "error");
+                return;
+            }
+
+            // ";" kullanılır: Türkçe Windows'un varsayılan listeleme ayracı budur, bu yüzden
+            // Excel'de çift tıklandığında otomatik olarak doğru sütunlara ayrılır. Ondalık
+            // ayracı ise nokta olduğu için (","değil) bu ikisi birbirine karışmaz.
+            const delimiter = ';';
+            const keys = ["OBJECTID", "ilce", "mahalle", "bina_sayisi", "Shape_Area", "puan_ortalama", "puan_std_sapma", "puan_min", "puan_max", "puan_range"];
+            const csvRows = [];
+
+            csvRows.push(keys.join(delimiter));
+
+            // Sadece anda uygulanmış filtrelere uyan veri aktarılır (buton etiketiyle tutarlı olsun diye)
+            last_filtered_data.forEach(row => {
+                const values = keys.map(key => formatCsvValue(row[key]));
+                csvRows.push(values.join(delimiter));
+            });
+
+            // UTF-8 + BOM: Türkçe karakterlerin doğru gösterilmesi için en güvenilir kombinasyon.
+            const bom = "﻿";
+            const csvContent = bom + csvRows.join("\r\n");
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", "balikesir_yapi_analiz_raporu.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            // Blob URL'i hemen iptal etmek bazı tarayıcılarda indirmenin başlamasıyla yarışıp
+            // yarım kalmasına yol açabiliyor; kısa bir gecikmeyle serbest bırakılır.
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+    </script>
+</body>
+</html>
