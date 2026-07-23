@@ -3,6 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Önbelleğe alınmayı engellemeye yönelik ipuçları (tarayıcılar bunları kısmen dikkate alır;
+         asıl garanti aşağıdaki network-first Service Worker'dır). -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Balıkesir Şehir Planlama Takip Sistemi</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -2124,6 +2129,30 @@
             // Blob URL'i hemen iptal etmek bazı tarayıcılarda indirmenin başlamasıyla yarışıp
             // yarım kalmasına yol açabiliyor; kısa bir gecikmeyle serbest bırakılır.
             setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+    </script>
+
+    <!-- Network-first Service Worker kaydı: sayfa her açılışta en güncel sürümü ağdan çeker,
+         böylece her GitHub Pages güncellemesi son kullanıcıya anında yansır (hard refresh gerekmez).
+         İnternet yoksa son çalışan sürüme düşer. -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // İlk ziyarette sayfa henüz SW kontrolünde değildir; o durumda gereksiz bir
+                // yenileme yapmamak için yalnızca ZATEN kontrol edilen sekmelerde reload dinleyicisi kur.
+                if (navigator.serviceWorker.controller) {
+                    let refreshing = false;
+                    navigator.serviceWorker.addEventListener('controllerchange', () => {
+                        if (refreshing) return;
+                        refreshing = true;
+                        window.location.reload();
+                    });
+                }
+                navigator.serviceWorker.register('./sw.js').then((reg) => {
+                    // Uzun süre açık kalan sekmelerde yeni deploy'u yakalamak için periyodik kontrol.
+                    setInterval(() => reg.update(), 60 * 1000);
+                }).catch(() => { /* SW desteklenmiyorsa sessizce geç */ });
+            });
         }
     </script>
 </body>
