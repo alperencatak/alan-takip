@@ -130,6 +130,40 @@
             background: transparent;
             height: 4px;
         }
+
+        /* Grafik hover tooltip'i: normal segmentlerde küçük/kompakt, "Diğer" segmentinde
+           (is-diger) sabit yükseklikte (~5 satır) ve içi scroll edilebilir. Kutu caret'in
+           üzerinde (yukarı doğru) açılır; açılıp kapanırken hafifçe yukarı kayarak ease-in-out
+           ile belirir/kaybolur. Üzerine gelindiğinde (mouseenter) tam opak olur. */
+        #chart-hover-tooltip {
+            width: 220px;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.22s ease-in-out, transform 0.22s ease-in-out, left 0.25s ease-in-out, top 0.25s ease-in-out;
+            pointer-events: auto;
+        }
+        /* İlk belirişte (kutu gizliyken açılırken) konumun eski yerinden kaymaması için
+           left/top geçişi kapatılır; segmentler arası gezinirken tekrar açılır (kayar). */
+        #chart-hover-tooltip.no-slide {
+            transition: opacity 0.22s ease-in-out, transform 0.22s ease-in-out;
+        }
+        #chart-hover-tooltip.visible {
+            opacity: 0.96;
+            transform: translateY(0);
+        }
+        #chart-hover-tooltip.visible:hover {
+            opacity: 1;
+        }
+        /* "Diğer" kutusu: başlık gerçek bir header olarak sabit durur (kutunun kendisi
+           scroll etmez), yalnızca içindeki liste (.tooltip-scroll-list) kayar. Böylece
+           başlık liste satırlarının arasına karışmaz, hep en üstte kalır. */
+        #chart-hover-tooltip.is-diger {
+            width: 260px;
+        }
+        #chart-hover-tooltip .tooltip-scroll-list {
+            max-height: 148px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body class="text-slate-100 min-h-screen overflow-x-hidden">
@@ -145,7 +179,7 @@
                     Balıkesir Şehir Planlama Takip Sistemi
                 </h1>
                 <p class="text-xs text-cyan-400 font-medium tracking-wider uppercase">
-                    CBS ve İmar Raporlama Portalı
+                    CBS Rapor Portalı
                 </p>
             </div>
         </div>
@@ -192,12 +226,24 @@
 
             <!-- SEARCH -->
             <div>
-                <label class="text-xs text-slate-400 font-semibold uppercase tracking-wider block mb-2">Parsel No (ID) / Mahalle Ara</label>
+                <label class="text-xs text-slate-400 font-semibold uppercase tracking-wider block mb-2">İlçe/Mahalle/ID Ara</label>
                 <div class="relative">
                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 text-sm"></i>
                     <input type="text" id="search-input" onkeyup="filterData()" placeholder="Örn: Karesi, Atatürk, K-EGE..."
                            class="w-full bg-[#111827] border border-[#1F2E4D] rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-cyan-500 transition placeholder-slate-600">
                 </div>
+
+                <!-- İLÇE MULTI-SELECT (küçük, kaydırılabilir liste) -->
+                <div class="mt-2.5">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider">İlçe Filtrele</span>
+                        <button id="ilce-clear-all-btn" type="button" onclick="toggleIlce('ALL')" class="hidden text-[10px] text-rose-400 hover:text-rose-300 font-semibold transition">Tümünü Kaldır</button>
+                    </div>
+                    <div id="ilce-slicer-container" class="max-h-32 overflow-y-auto custom-scrollbar bg-[#111827] border border-[#1F2E4D] rounded-xl divide-y divide-[#1A263E]">
+                        <!-- Dinamik olarak, alfabetik sıralı doldurulur -->
+                    </div>
+                </div>
+
                 <!-- Seçili mahalleler (kaldırılabilir etiketler) -->
                 <div id="selected-mahalle-chips" class="hidden flex flex-wrap gap-1.5 mt-2.5"></div>
             </div>
@@ -205,7 +251,7 @@
             <!-- MAHALLE SLICER (A-Z sıralı, kaydırılabilir liste — çok sayıda mahalle için) -->
             <div>
                 <div class="flex items-center justify-between mb-2">
-                    <label class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Mahalle Slicer <span class="normal-case text-slate-500">(Çoklu, A-Z)</span></label>
+                    <label class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Mahalleler</label>
                     <button id="mahalle-clear-all-btn" type="button" onclick="toggleMahalle('ALL')" class="hidden text-[10px] text-rose-400 hover:text-rose-300 font-semibold transition">Tümünü Kaldır</button>
                 </div>
                 <div id="mahalle-slicer-container" class="max-h-60 overflow-y-auto custom-scrollbar bg-[#111827] border border-[#1F2E4D] rounded-xl divide-y divide-[#1A263E]">
@@ -249,29 +295,37 @@
                 </div>
             </div>
 
-            <!-- DENSITY SELECT -->
+            <!-- DENSITY MULTI-SELECT -->
             <div>
-                <label class="text-xs text-slate-400 font-semibold uppercase tracking-wider block mb-2">Yapı Yoğunluğu Sınıfı</label>
-                <select id="density-select" onchange="filterData()" class="w-full bg-[#111827] border border-[#1F2E4D] rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-cyan-500 transition">
-                    <option value="ALL">Tümü (Sınırsız)</option>
-                    <option value="HIGH">Yüksek Yoğunluk (>50 Bina)</option>
-                    <option value="MEDIUM">Orta Yoğunluk (20 - 50 Bina)</option>
-                    <option value="LOW">Düşük Yoğunluk (<20 Bina)</option>
-                </select>
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Yapı Yoğunluğu Sınıfı</label>
+                    <button id="density-clear-all-btn" type="button" onclick="toggleDensity('ALL')" class="hidden text-[10px] text-rose-400 hover:text-rose-300 font-semibold transition">Tümünü Kaldır</button>
+                </div>
+                <div id="density-checklist" class="bg-[#111827] border border-[#1F2E4D] rounded-xl divide-y divide-[#1A263E] overflow-hidden">
+                    <button type="button" class="density-btn w-full flex items-center gap-2 px-3 py-2 text-[11px] font-medium text-slate-300 hover:bg-[#1A263E] transition text-left" data-density="HIGH" onclick="toggleDensity('HIGH')">
+                        <span class="density-check w-4 h-4 rounded border border-[#1F2E4D] flex items-center justify-center flex-shrink-0 transition-colors"><i class="fa-solid fa-check text-[8px] text-white opacity-0 transition-opacity"></i></span>
+                        <span class="flex-1">Yüksek Yoğunluk (&gt;50 Bina)</span>
+                    </button>
+                    <button type="button" class="density-btn w-full flex items-center gap-2 px-3 py-2 text-[11px] font-medium text-slate-300 hover:bg-[#1A263E] transition text-left" data-density="MEDIUM" onclick="toggleDensity('MEDIUM')">
+                        <span class="density-check w-4 h-4 rounded border border-[#1F2E4D] flex items-center justify-center flex-shrink-0 transition-colors"><i class="fa-solid fa-check text-[8px] text-white opacity-0 transition-opacity"></i></span>
+                        <span class="flex-1">Orta Yoğunluk (20 - 50 Bina)</span>
+                    </button>
+                    <button type="button" class="density-btn w-full flex items-center gap-2 px-3 py-2 text-[11px] font-medium text-slate-300 hover:bg-[#1A263E] transition text-left" data-density="LOW" onclick="toggleDensity('LOW')">
+                        <span class="density-check w-4 h-4 rounded border border-[#1F2E4D] flex items-center justify-center flex-shrink-0 transition-colors"><i class="fa-solid fa-check text-[8px] text-white opacity-0 transition-opacity"></i></span>
+                        <span class="flex-1">Düşük Yoğunluk (&lt;20 Bina)</span>
+                    </button>
+                </div>
             </div>
 
-            <!-- QUALITY SCALE SELECT -->
+            <!-- QUALITY SCALE MULTI-SELECT (dinamik olarak QUALITY_TIERS'tan doldurulur) -->
             <div>
-                <label class="text-xs text-slate-400 font-semibold uppercase tracking-wider block mb-2">Puan Kalite Skalası</label>
-                <select id="quality-select" onchange="filterData()" class="w-full bg-[#111827] border border-[#1F2E4D] rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-cyan-500 transition">
-                    <option value="ALL">Tümü (Sınırsız)</option>
-                    <option value="HARIKA">Harika (60 - 190)</option>
-                    <option value="COK_IYI">Çok İyi (45 - 60)</option>
-                    <option value="IYI">İyi (30 - 45)</option>
-                    <option value="ORTA">Orta (0 - 30)</option>
-                    <option value="KOTU">Kötü (-30 - 0)</option>
-                    <option value="KRITIK">Kritik (-130 - -30)</option>
-                </select>
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Puan Kalite Skalası</label>
+                    <button id="quality-clear-all-btn" type="button" onclick="toggleQuality('ALL')" class="hidden text-[10px] text-rose-400 hover:text-rose-300 font-semibold transition">Tümünü Kaldır</button>
+                </div>
+                <div id="quality-checklist" class="bg-[#111827] border border-[#1F2E4D] rounded-xl divide-y divide-[#1A263E] overflow-hidden">
+                    <!-- Dinamik olarak QUALITY_TIERS'tan doldurulur -->
+                </div>
             </div>
 
             <div class="pt-4 border-t border-[#1A263E] text-[11px] text-slate-400 space-y-2">
@@ -286,7 +340,7 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 
                 <!-- KPI 1: Toplam Parsel -->
-                <div onclick="toggleKpiDetail('parsel')" class="bg-gradient-to-br from-[#0D1527] to-[#0A0E17] border border-[#1A263E] p-4 rounded-2xl flex items-center justify-between shadow-lg glow-blue transition-all duration-300 hover:translate-y-[-2px] cursor-pointer">
+                <div onclick="toggleKpiDetail('parsel')" onkeydown="handleKpiKey(event, 'parsel')" role="button" tabindex="0" aria-label="Aktif İmar Adası detayını aç" class="bg-gradient-to-br from-[#0D1527] to-[#0A0E17] border border-[#1A263E] p-4 rounded-2xl flex items-center justify-between shadow-lg glow-blue transition-all duration-300 hover:translate-y-[-2px] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0E17]">
                     <div class="space-y-1">
                         <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Aktif İmar Adası</span>
                         <div class="flex items-baseline space-x-1.5">
@@ -300,7 +354,7 @@
                 </div>
 
                 <!-- KPI 2: Toplam Bina -->
-                <div onclick="toggleKpiDetail('bina')" class="bg-gradient-to-br from-[#0D1527] to-[#0A0E17] border border-[#1A263E] p-4 rounded-2xl flex items-center justify-between shadow-lg glow-blue transition-all duration-300 hover:translate-y-[-2px] cursor-pointer">
+                <div onclick="toggleKpiDetail('bina')" onkeydown="handleKpiKey(event, 'bina')" role="button" tabindex="0" aria-label="Toplam Yapı Stoğu detayını aç" class="bg-gradient-to-br from-[#0D1527] to-[#0A0E17] border border-[#1A263E] p-4 rounded-2xl flex items-center justify-between shadow-lg glow-blue transition-all duration-300 hover:translate-y-[-2px] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0E17]">
                     <div class="space-y-1">
                         <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Toplam Yapı Stoğu</span>
                         <div class="flex items-baseline space-x-1.5">
@@ -314,7 +368,7 @@
                 </div>
 
                 <!-- KPI 3: Toplam Çalışma Alanı -->
-                <div onclick="toggleKpiDetail('alan')" class="bg-gradient-to-br from-[#0D1527] to-[#0A0E17] border border-[#1A263E] p-4 rounded-2xl flex items-center justify-between shadow-lg glow-blue transition-all duration-300 hover:translate-y-[-2px] cursor-pointer">
+                <div onclick="toggleKpiDetail('alan')" onkeydown="handleKpiKey(event, 'alan')" role="button" tabindex="0" aria-label="İmar Planlama Alanı detayını aç" class="bg-gradient-to-br from-[#0D1527] to-[#0A0E17] border border-[#1A263E] p-4 rounded-2xl flex items-center justify-between shadow-lg glow-blue transition-all duration-300 hover:translate-y-[-2px] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0E17]">
                     <div class="space-y-1">
                         <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">İmar Planlama Alanı</span>
                         <div class="flex items-baseline space-x-1.5">
@@ -328,7 +382,7 @@
                 </div>
 
                 <!-- KPI 4: Ağırlıklı Puan -->
-                <div onclick="toggleKpiDetail('puan')" class="bg-gradient-to-br from-[#0D1527] to-[#0A0E17] border border-[#1A263E] p-4 rounded-2xl flex items-center justify-between shadow-lg glow-emerald transition-all duration-300 hover:translate-y-[-2px] cursor-pointer">
+                <div onclick="toggleKpiDetail('puan')" onkeydown="handleKpiKey(event, 'puan')" role="button" tabindex="0" aria-label="Genel Hizmet Skoru detayını aç" class="bg-gradient-to-br from-[#0D1527] to-[#0A0E17] border border-[#1A263E] p-4 rounded-2xl flex items-center justify-between shadow-lg glow-emerald transition-all duration-300 hover:translate-y-[-2px] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0E17]">
                     <div class="space-y-1">
                         <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Genel Hizmet Skoru</span>
                         <div class="flex items-baseline space-x-1.5">
@@ -349,7 +403,7 @@
                     <h4 class="text-sm font-bold heading-font tracking-wide text-slate-200 uppercase flex items-center gap-2">
                         <i class="fa-solid fa-chart-simple text-cyan-400"></i> <span id="kpi-detail-title-text"></span>
                     </h4>
-                    <button onclick="closeKpiDetail()" class="text-slate-400 hover:text-white transition w-8 h-8 rounded-lg hover:bg-[#1A263E] flex items-center justify-center">
+                    <button onclick="closeKpiDetail()" aria-label="Detay panelini kapat" class="text-slate-400 hover:text-white transition w-8 h-8 rounded-lg hover:bg-[#1A263E] flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
@@ -363,14 +417,8 @@
             <div class="bg-[#0A0E17] border border-[#1A263E] rounded-2xl p-5 flex flex-col h-[420px] shadow-2xl relative overflow-hidden">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-sm font-bold heading-font tracking-wide text-slate-200 uppercase flex items-center gap-2">
-                        <i class="fa-solid fa-earth-europe text-cyan-400"></i> İnteraktif İmar Adaları Simülasyon Haritası
+                        <i class="fa-solid fa-earth-europe text-cyan-400"></i> Alan ID Haritası
                     </h3>
-                    <div class="flex items-center gap-3">
-                        <span class="text-[11px] bg-slate-800 text-slate-300 px-3 py-1 rounded-full border border-slate-700 font-medium flex items-center gap-1.5">
-                            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-                            Scroll Destekli Matris Aktif
-                        </span>
-                    </div>
                 </div>
 
                 <!-- GIS Map CSS Grid Container (Scrollable, precisely 4 visible rows) -->
@@ -387,13 +435,8 @@
                     
                     <div class="absolute bottom-full left-0 mb-3 bg-[#0A0E17]/95 border border-[#1A263E] rounded-xl p-3.5 text-[11px] space-y-2 backdrop-blur-md shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 w-52 transform translate-y-2 group-hover:translate-y-0">
                         <div class="font-bold text-slate-400 uppercase tracking-wider mb-2 border-b border-[#1A263E] pb-1.5">Puan Kalite Skalası</div>
-                        <div class="flex flex-col gap-2">
-                            <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded bg-[#10B981] shadow-sm"></span><span class="text-slate-300 font-medium">Harika (60 - 190)</span></div>
-                            <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded bg-[#22D3EE] shadow-sm"></span><span class="text-slate-300 font-medium">Çok İyi (45 - 60)</span></div>
-                            <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded bg-[#3B82F6] shadow-sm"></span><span class="text-slate-300 font-medium">İyi (30 - 45)</span></div>
-                            <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded bg-[#F59E0B] shadow-sm"></span><span class="text-slate-300 font-medium">Orta (0 - 30)</span></div>
-                            <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded bg-[#F43F5E] shadow-sm"></span><span class="text-slate-300 font-medium">Kötü (-30 - 0)</span></div>
-                            <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded bg-[#9F1239] shadow-sm"></span><span class="text-slate-300 font-medium">Kritik (-130 - -30)</span></div>
+                        <div id="quality-scale-legend" class="flex flex-col gap-2">
+                            <!-- Dinamik olarak QUALITY_TIERS'tan doldurulur -->
                         </div>
                     </div>
                 </div>
@@ -408,7 +451,7 @@
                 
                 <div class="lg:col-span-7 bg-[#0A0E17] border border-[#1A263E] rounded-2xl p-5 shadow-2xl flex flex-col h-[320px] overflow-hidden">
                     <h4 class="text-sm font-bold heading-font tracking-wide text-slate-200 uppercase flex items-center gap-2 mb-4">
-                        <i class="fa-solid fa-chart-column text-cyan-400"></i> Puan Ortalaması ve Bina Yoğunluğu İlişkisi (Top 50)
+                        <i class="fa-solid fa-chart-column text-cyan-400"></i> Puan Ortalaması ve Bina Yoğunluğu İlişkisi
                     </h4>
                     <div class="flex-grow relative min-h-0">
                         <canvas id="score-density-chart"></canvas>
@@ -508,12 +551,20 @@
         </div>
     </footer>
 
+    <!-- Grafiklerdeki (özellikle "Diğer" segmentindeki) hover detayı için gerçek DOM tooltip.
+         Chart.js'in varsayılan tooltip'i canvas'a çizilir, bu yüzden üzerine gelinip scroll
+         edilemez; bunun yerine bu kutu external tooltip olarak konumlandırılıp içeriklenir. -->
+    <div id="chart-hover-tooltip" class="hidden fixed z-[9999] bg-[#0A0E17] border border-[#1A263E] rounded-xl shadow-2xl backdrop-blur-md text-[11px] p-3"></div>
+
     <script>
         // Start empty. Data is populated dynamically from excel.
         let raw_dataset = [];
 
         // System Configuration State
         let active_mahalles = new Set(); // Empty set == 'Tümü' (ALL) selected
+        let active_ilceler = new Set(); // Empty set == 'Tümü' (ALL) selected
+        let active_densities = new Set(); // Empty set == 'Tümü' (ALL) selected
+        let active_qualities = new Set(); // Empty set == 'Tümü' (ALL) selected
         let min_bina = 0;
         let max_bina = 150;
         let min_puan = -130;
@@ -528,15 +579,63 @@
         let densityChart, pieChart, kpiDetailChart;
         let activeKpiDetail = null;
 
+        // Puan kalite skalası — tek kaynak: renk, etiket, filtre eşiği hepsi buradan türetilir.
+        // min dahil, bir üst tier'ın min'i o tier'ın üst sınırıdır (140-190, 95-140, ... -130-(-20)).
+        const QUALITY_TIERS = [
+            { key: 'MUKEMMEL', label: 'Mükemmel', min: 140, max: 190, color: '#8B5CF6' },
+            { key: 'HARIKA',   label: 'Harika',    min: 95,  max: 140, color: '#10B981' },
+            { key: 'COK_IYI',  label: 'Çok İyi',   min: 65,  max: 95,  color: '#22D3EE' },
+            { key: 'IYI',      label: 'İyi',       min: 40,  max: 65,  color: '#3B82F6' },
+            { key: 'ORTA',     label: 'Orta',      min: 15,  max: 40,  color: '#F59E0B' },
+            { key: 'KOTU',     label: 'Kötü',      min: -20, max: 15,  color: '#F43F5E' },
+            { key: 'KRITIK',   label: 'Kritik',    min: -130, max: -20, color: '#9F1239' }
+        ];
+
         // Initialize App components
         document.addEventListener('DOMContentLoaded', () => {
             initExcelDropzone();
             initCharts();
+            initChartHoverTooltip();
+            renderQualityChecklist();
+            renderQualityScaleLegend();
             bindDualRangeStacking(document.getElementById('bina-slider'), document.getElementById('bina-slider-max'));
             bindDualRangeStacking(document.getElementById('puan-slider'), document.getElementById('puan-slider-max'));
             // Automatically attempt loading from configured local path on startup
             autoLoadLocalExcel();
         });
+
+        // "Puan Kalite Skalası" çoklu-seçim listesini QUALITY_TIERS'tan üretir
+        function renderQualityChecklist() {
+            const container = document.getElementById('quality-checklist');
+            if (!container) return;
+            const fragment = document.createDocumentFragment();
+            QUALITY_TIERS.forEach(tier => {
+                const row = document.createElement('button');
+                row.type = 'button';
+                row.className = "quality-btn w-full flex items-center gap-2 px-3 py-2 text-[11px] font-medium text-slate-300 hover:bg-[#1A263E] transition text-left";
+                row.dataset.quality = tier.key;
+                row.innerHTML = `
+                    <span class="quality-check w-4 h-4 rounded border border-[#1F2E4D] flex items-center justify-center flex-shrink-0 transition-colors">
+                        <i class="fa-solid fa-check text-[8px] text-white opacity-0 transition-opacity"></i>
+                    </span>
+                    <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: ${tier.color}"></span>
+                    <span class="flex-1">${tier.label} (${tier.min} - ${tier.max})</span>
+                `;
+                row.addEventListener('click', () => toggleQuality(tier.key));
+                fragment.appendChild(row);
+            });
+            container.innerHTML = '';
+            container.appendChild(fragment);
+        }
+
+        // Harita kartındaki floating "Puan Kalite Skalası" legend'ini QUALITY_TIERS'tan üretir
+        function renderQualityScaleLegend() {
+            const container = document.getElementById('quality-scale-legend');
+            if (!container) return;
+            container.innerHTML = QUALITY_TIERS.map(tier => `
+                <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded shadow-sm" style="background-color: ${tier.color}"></span><span class="text-slate-300 font-medium">${tier.label} (${tier.min} - ${tier.max})</span></div>
+            `).join('');
+        }
 
         function initExcelDropzone() {
             const dropZone = document.getElementById('drop-zone');
@@ -710,6 +809,35 @@
             container.appendChild(fragment);
 
             highlightActiveSlicer();
+
+            // İlçe listesi (aynı model, ayrı Set/state ile)
+            const ilceContainer = document.getElementById('ilce-slicer-container');
+            if (ilceContainer) {
+                const ilceler = [...new Set(raw_dataset.map(item => item.ilce))]
+                    .sort((a, b) => a.localeCompare(b, 'tr'));
+
+                const ilceFragment = document.createDocumentFragment();
+                ilceler.forEach(il => {
+                    const row = document.createElement('button');
+                    row.type = 'button';
+                    row.className = "ilce-btn w-full flex items-center gap-2 px-3 py-2 text-[11px] font-medium text-slate-300 hover:bg-[#1A263E] transition text-left";
+                    row.dataset.ilce = il;
+                    row.innerHTML = `
+                        <span class="ilce-check w-4 h-4 rounded border border-[#1F2E4D] flex items-center justify-center flex-shrink-0 transition-colors">
+                            <i class="fa-solid fa-check text-[8px] text-white opacity-0 transition-opacity"></i>
+                        </span>
+                        <span class="ilce-label truncate flex-1"></span>
+                    `;
+                    row.querySelector('.ilce-label').textContent = il;
+                    row.addEventListener('click', () => toggleIlce(il));
+                    ilceFragment.appendChild(row);
+                });
+
+                ilceContainer.innerHTML = '';
+                ilceContainer.appendChild(ilceFragment);
+
+                highlightActiveIlceSlicer();
+            }
         }
 
         // Setup sliders based on max values in dataset safely
@@ -734,15 +862,25 @@
             // Puan aralığı (-130 / 190) kullanıcı isteği üzerine sabit tutulur, dinamik değişmez.
         }
 
-        // Updated Classification Tiers based on new criteria:
-        // (-130 ve -30), (-30 ve 0), (0 ve 30), (30 ve 45), (45 ve 60), (60 ve 190)
+        // Classification tiers are driven by QUALITY_TIERS (single source of truth)
         function getScoreColor(score) {
-            if (score >= 60) return '#10B981';  // Harika (Emerald)
-            if (score >= 45) return '#22D3EE';  // Çok İyi (Cyan)
-            if (score >= 30) return '#3B82F6';  // İyi (Blue)
-            if (score >= 0)  return '#F59E0B';  // Orta (Amber)
-            if (score >= -30) return '#F43F5E'; // Kötü (Rose)
-            return '#9F1239';                   // Kritik (Dark Rose)
+            for (const tier of QUALITY_TIERS) {
+                if (score >= tier.min) return tier.color;
+            }
+            return QUALITY_TIERS[QUALITY_TIERS.length - 1].color;
+        }
+
+        function getQualityTier(score) {
+            for (const tier of QUALITY_TIERS) {
+                if (score >= tier.min) return tier.key;
+            }
+            return QUALITY_TIERS[QUALITY_TIERS.length - 1].key;
+        }
+
+        function getStatusBadgeHTML(score) {
+            const tierKey = getQualityTier(score);
+            const tier = QUALITY_TIERS.find(t => t.key === tierKey) || QUALITY_TIERS[QUALITY_TIERS.length - 1];
+            return `<span class="px-2 py-0.5 rounded text-[10px] font-medium" style="background-color:${tier.color}1A; color:${tier.color}; border:1px solid ${tier.color}33;">${tier.label}</span>`;
         }
 
         function toggleMahalle(mahalle) {
@@ -760,32 +898,96 @@
             filterData();
         }
 
+        // Ortak checkbox-liste highlight mantığı — mahalle/ilçe/yoğunluk/kalite listelerinin
+        // hepsi aynı görsel şablonu (buton + check kutusu) paylaştığı için tek yerden yönetilir.
+        function highlightChecklist(containerEl, btnClass, checkClass, datasetKey, activeSet) {
+            if (!containerEl) return;
+            containerEl.querySelectorAll('.' + btnClass).forEach(row => {
+                const isActive = activeSet.has(row.dataset[datasetKey]);
+                const checkEl = row.querySelector('.' + checkClass);
+                const checkIcon = checkEl ? checkEl.querySelector('i') : null;
+
+                row.classList.toggle('bg-cyan-600/20', isActive);
+                row.classList.toggle('text-white', isActive);
+                row.classList.toggle('font-bold', isActive);
+                row.classList.toggle('text-slate-300', !isActive);
+                row.classList.toggle('font-medium', !isActive);
+
+                if (checkEl) {
+                    checkEl.classList.toggle('bg-cyan-500', isActive);
+                    checkEl.classList.toggle('border-cyan-500', isActive);
+                }
+                if (checkIcon) checkIcon.classList.toggle('opacity-0', !isActive);
+            });
+        }
+
         function highlightActiveSlicer() {
-            const container = document.getElementById('mahalle-slicer-container');
-            if (container) {
-                container.querySelectorAll('.mahalle-btn').forEach(row => {
-                    const isActive = active_mahalles.has(row.dataset.mahalle);
-                    const checkEl = row.querySelector('.mahalle-check');
-                    const checkIcon = checkEl ? checkEl.querySelector('i') : null;
-
-                    row.classList.toggle('bg-cyan-600/20', isActive);
-                    row.classList.toggle('text-white', isActive);
-                    row.classList.toggle('font-bold', isActive);
-                    row.classList.toggle('text-slate-300', !isActive);
-                    row.classList.toggle('font-medium', !isActive);
-
-                    if (checkEl) {
-                        checkEl.classList.toggle('bg-cyan-500', isActive);
-                        checkEl.classList.toggle('border-cyan-500', isActive);
-                    }
-                    if (checkIcon) checkIcon.classList.toggle('opacity-0', !isActive);
-                });
-            }
+            highlightChecklist(document.getElementById('mahalle-slicer-container'), 'mahalle-btn', 'mahalle-check', 'mahalle', active_mahalles);
 
             const clearAllBtn = document.getElementById('mahalle-clear-all-btn');
             if (clearAllBtn) clearAllBtn.classList.toggle('hidden', active_mahalles.size === 0);
 
             renderSelectedMahalleChips();
+        }
+
+        function toggleIlce(ilce) {
+            if (ilce === 'ALL') {
+                active_ilceler.clear();
+            } else if (active_ilceler.has(ilce)) {
+                active_ilceler.delete(ilce);
+            } else {
+                active_ilceler.add(ilce);
+            }
+            highlightActiveIlceSlicer();
+            current_page = 1;
+            filterData();
+        }
+
+        function highlightActiveIlceSlicer() {
+            highlightChecklist(document.getElementById('ilce-slicer-container'), 'ilce-btn', 'ilce-check', 'ilce', active_ilceler);
+
+            const clearAllBtn = document.getElementById('ilce-clear-all-btn');
+            if (clearAllBtn) clearAllBtn.classList.toggle('hidden', active_ilceler.size === 0);
+        }
+
+        function toggleDensity(value) {
+            if (value === 'ALL') {
+                active_densities.clear();
+            } else if (active_densities.has(value)) {
+                active_densities.delete(value);
+            } else {
+                active_densities.add(value);
+            }
+            highlightActiveDensity();
+            current_page = 1;
+            filterData();
+        }
+
+        function highlightActiveDensity() {
+            highlightChecklist(document.getElementById('density-checklist'), 'density-btn', 'density-check', 'density', active_densities);
+
+            const clearAllBtn = document.getElementById('density-clear-all-btn');
+            if (clearAllBtn) clearAllBtn.classList.toggle('hidden', active_densities.size === 0);
+        }
+
+        function toggleQuality(value) {
+            if (value === 'ALL') {
+                active_qualities.clear();
+            } else if (active_qualities.has(value)) {
+                active_qualities.delete(value);
+            } else {
+                active_qualities.add(value);
+            }
+            highlightActiveQuality();
+            current_page = 1;
+            filterData();
+        }
+
+        function highlightActiveQuality() {
+            highlightChecklist(document.getElementById('quality-checklist'), 'quality-btn', 'quality-check', 'quality', active_qualities);
+
+            const clearAllBtn = document.getElementById('quality-clear-all-btn');
+            if (clearAllBtn) clearAllBtn.classList.toggle('hidden', active_qualities.size === 0);
         }
 
         // Arama kutusunun altında, seçili mahalleleri kaldırılabilir etiketler olarak gösterir
@@ -896,6 +1098,9 @@
 
         function resetFilters() {
             active_mahalles.clear();
+            active_ilceler.clear();
+            active_densities.clear();
+            active_qualities.clear();
             min_bina = 0;
             max_bina = parseInt(document.getElementById('bina-slider-max')?.max) || 150;
             min_puan = -130;
@@ -917,12 +1122,6 @@
             const searchInput = document.getElementById('search-input');
             if(searchInput) searchInput.value = "";
 
-            const densitySelect = document.getElementById('density-select');
-            if(densitySelect) densitySelect.value = "ALL";
-
-            const qualitySelect = document.getElementById('quality-select');
-            if(qualitySelect) qualitySelect.value = "ALL";
-
             const binaVal = document.getElementById('bina-val');
             if(binaVal) binaVal.innerText = "0";
 
@@ -936,6 +1135,9 @@
             if(puanMaxValEl) puanMaxValEl.innerText = max_puan;
 
             highlightActiveSlicer();
+            highlightActiveIlceSlicer();
+            highlightActiveDensity();
+            highlightActiveQuality();
             current_page = 1;
             filterData();
         }
@@ -944,33 +1146,29 @@
             // Null-safe reads for HTML elements
             const searchInputEl = document.getElementById('search-input');
             const searchQuery = searchInputEl ? searchInputEl.value.toLowerCase() : '';
-            
-            const densitySelectEl = document.getElementById('density-select');
-            const densityFilter = densitySelectEl ? densitySelectEl.value : 'ALL';
-
-            const qualitySelectEl = document.getElementById('quality-select');
-            const qualityFilter = qualitySelectEl ? qualitySelectEl.value : 'ALL';
 
             const filtered = raw_dataset.filter(item => {
                 // Neighborhood (multi-select — empty set means "Tümü")
                 if (active_mahalles.size > 0 && !active_mahalles.has(item.mahalle)) return false;
 
+                // İlçe (multi-select — empty set means "Tümü")
+                if (active_ilceler.size > 0 && !active_ilceler.has(item.ilce)) return false;
+
                 // Sliders (çift uçlu: hem alt hem üst sınır)
                 if (item.bina_sayisi < min_bina || item.bina_sayisi > max_bina) return false;
                 if (item.puan_ortalama < min_puan || item.puan_ortalama > max_puan) return false;
 
-                // Density class
-                if (densityFilter === 'HIGH' && item.bina_sayisi <= 50) return false;
-                if (densityFilter === 'MEDIUM' && (item.bina_sayisi > 50 || item.bina_sayisi < 20)) return false;
-                if (densityFilter === 'LOW' && item.bina_sayisi >= 20) return false;
+                // Density class (multi-select — empty set means "Tümü", any match within selection passes)
+                if (active_densities.size > 0) {
+                    let densityMatch = false;
+                    if (active_densities.has('HIGH') && item.bina_sayisi > 50) densityMatch = true;
+                    if (active_densities.has('MEDIUM') && item.bina_sayisi >= 20 && item.bina_sayisi <= 50) densityMatch = true;
+                    if (active_densities.has('LOW') && item.bina_sayisi < 20) densityMatch = true;
+                    if (!densityMatch) return false;
+                }
 
-                // Quality scale (score tiers)
-                if (qualityFilter === 'HARIKA' && item.puan_ortalama < 60) return false;
-                if (qualityFilter === 'COK_IYI' && (item.puan_ortalama < 45 || item.puan_ortalama >= 60)) return false;
-                if (qualityFilter === 'IYI' && (item.puan_ortalama < 30 || item.puan_ortalama >= 45)) return false;
-                if (qualityFilter === 'ORTA' && (item.puan_ortalama < 0 || item.puan_ortalama >= 30)) return false;
-                if (qualityFilter === 'KOTU' && (item.puan_ortalama < -30 || item.puan_ortalama >= 0)) return false;
-                if (qualityFilter === 'KRITIK' && item.puan_ortalama >= -30) return false;
+                // Quality scale (multi-select — empty set means "Tümü", any match within selection passes)
+                if (active_qualities.size > 0 && !active_qualities.has(getQualityTier(item.puan_ortalama))) return false;
 
                 // Query search (OBJECTID artık "K-ATA-0001" gibi alfanümerik olabildiği için
                 // karşılaştırma büyük/küçük harften bağımsız yapılır)
@@ -978,7 +1176,8 @@
                     const idLower = item.OBJECTID.toLowerCase();
                     const matchID = ("id " + idLower).includes(searchQuery) || idLower === searchQuery;
                     const matchMahalle = item.mahalle.toLowerCase().includes(searchQuery);
-                    if (!matchID && !matchMahalle) return false;
+                    const matchIlce = item.ilce.toLowerCase().includes(searchQuery);
+                    if (!matchID && !matchMahalle && !matchIlce) return false;
                 }
 
                 return true;
@@ -1147,7 +1346,154 @@
             if(hoverBox) hoverBox.style.opacity = '0';
         }
 
+        // ---- Grafik hover tooltip'i (Chart.js "external" modu) ----
+        // Native Chart.js tooltip'i canvas'a çizilir, gerçek bir DOM elemanı olmadığı için
+        // üzerine gelinip scroll edilemez. "Diğer" segmentlerinde onlarca mahalle listelenebildiği
+        // için burada gerçek bir HTML kutusu kullanılır: mouse chart'tan ayrılınca hemen kapanmaz
+        // (kısa bir gecikmeyle), bu sayede kullanıcı mouse'u kutunun üzerine taşıyıp içini
+        // scroll edebilir; kutunun üzerindeyken opaklığı artar.
+        let chartTooltipHideTimer = null;
+        // Mouse şu an kutunun üzerinde mi? (kutuya girildikten SONRA canvas'tan çıkış
+        // opacity=0 tetikleyip yeni bir kapatma zamanlayıcısı kurabiliyor; bu bayrak sayesinde
+        // kutu üstündeyken hiçbir zamanlayıcı onu kapatamaz.)
+        let chartTooltipHovered = false;
+
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        }
+
+        function getChartTooltipEl() {
+            return document.getElementById('chart-hover-tooltip');
+        }
+
+        // Kutuyu caret'in ÜSTÜNDE (yukarı doğru) ve yatayda caret üzerinde ortalanmış konumlandırır.
+        // Böylece kutu bar segmentlerinin/dilimlerin üzerine binmez; kullanıcı mouse'u yukarı taşıyıp
+        // scroll edebilir (eskiden sola açıldığında segmentlerle çakışıp sürekli açılıp kapanıyordu).
+        function positionChartTooltip(chart, tooltipModel) {
+            const el = getChartTooltipEl();
+            if (!el) return;
+            const canvasRect = chart.canvas.getBoundingClientRect();
+            let left = canvasRect.left + tooltipModel.caretX - (el.offsetWidth / 2);
+            let top = canvasRect.top + tooltipModel.caretY - el.offsetHeight - 14;
+
+            // Yatayda ekran dışına taşmayı engelle
+            if (left + el.offsetWidth > window.innerWidth - 8) left = window.innerWidth - el.offsetWidth - 8;
+            if (left < 8) left = 8;
+            // Yukarıda yer yoksa caret'in altına al
+            if (top < 8) top = canvasRect.top + tooltipModel.caretY + 14;
+            if (top + el.offsetHeight > window.innerHeight - 8) top = window.innerHeight - el.offsetHeight - 8;
+
+            el.style.left = left + 'px';
+            el.style.top = top + 'px';
+        }
+
+        function showChartTooltip(chart, tooltipModel, html, isDiger) {
+            const el = getChartTooltipEl();
+            if (!el) return;
+            clearTimeout(chartTooltipHideTimer);
+            const wasHidden = el.classList.contains('hidden');
+            el.innerHTML = html;
+            el.classList.remove('hidden');
+            el.classList.toggle('is-diger', !!isDiger);
+            // İlk belirişte konumu anında ayarla (eski yerinden kaymasın); zaten açıksa
+            // yeni segmente doğru kayarak (left/top geçişiyle) taşınsın.
+            if (wasHidden) el.classList.add('no-slide');
+            positionChartTooltip(chart, tooltipModel);
+            requestAnimationFrame(() => {
+                el.classList.add('visible');
+                if (wasHidden) requestAnimationFrame(() => el.classList.remove('no-slide'));
+            });
+        }
+
+        function scheduleHideChartTooltip() {
+            clearTimeout(chartTooltipHideTimer);
+            chartTooltipHideTimer = setTimeout(() => {
+                if (chartTooltipHovered) return; // kutu üstünde: kapatma
+                const el = getChartTooltipEl();
+                if (!el) return;
+                // Önce çıkış animasyonu (fade + aşağı kayma), animasyon bitince gizle
+                el.classList.remove('visible');
+                setTimeout(() => {
+                    if (!el.classList.contains('visible')) {
+                        el.classList.add('hidden');
+                        el.classList.remove('is-diger', 'no-slide');
+                    }
+                }, 240);
+            }, 400);
+        }
+
+        // Kutuyu animasyonsuz, anında gizler. Sayfa scroll edilince / pencere yeniden
+        // boyutlanınca konumu geçersiz kaldığı için (position:fixed) hemen kapatmak gerekir.
+        function forceHideChartTooltip() {
+            clearTimeout(chartTooltipHideTimer);
+            chartTooltipHovered = false;
+            const el = getChartTooltipEl();
+            if (el) { el.classList.add('hidden'); el.classList.remove('visible', 'is-diger', 'no-slide'); }
+        }
+
+        // Kutunun kendisine mouse ile girilirse kapanma zamanlayıcısı iptal edilir (scroll
+        // edebilmek için açık kalması gerekir) ve opaklık tam yapılır.
+        function initChartHoverTooltip() {
+            const el = getChartTooltipEl();
+            if (!el) return;
+            el.addEventListener('mouseenter', () => {
+                // Kapanma zamanlayıcısını iptal et ve (çıkış animasyonu başlamış olsa bile)
+                // kutuyu tam açık haline geri getir; böylece üzerine gelince açık kalır.
+                chartTooltipHovered = true;
+                clearTimeout(chartTooltipHideTimer);
+                el.classList.remove('hidden');
+                el.classList.add('visible');
+            });
+            el.addEventListener('mouseleave', () => {
+                chartTooltipHovered = false;
+                scheduleHideChartTooltip();
+            });
+
+            // (2) Sayfa scroll edilince / pencere boyutlanınca kutu havada asılı kalmasın.
+            // Kutunun kendi iç scroll'u (is-diger listesi) window scroll'u tetiklemez, bu yüzden
+            // kutu üzerindeyken (chartTooltipHovered) kapatmayız — sadece sayfa hareketinde.
+            window.addEventListener('scroll', () => { if (!chartTooltipHovered) forceHideChartTooltip(); }, { passive: true });
+            window.addEventListener('resize', () => forceHideChartTooltip());
+
+            // (1) Dokunmatik: bir segmente dokununca Chart.js kutuyu açar; kutunun ya da
+            // grafiğin DIŞINA dokununca kutuyu kapat.
+            document.addEventListener('touchstart', (e) => {
+                if (el.contains(e.target)) return;                 // kutunun içi
+                if (e.target && e.target.tagName === 'CANVAS') return; // bir grafiğin üstü
+                forceHideChartTooltip();
+            }, { passive: true });
+        }
+
+        // (3) Boş veri durumu: dataset yoksa/tümü geçersizse grafiğin ortasına açıklama yazar.
+        // Tüm grafiklere global olarak uygulanır (density, pie, kpi-detail...).
+        const emptyStatePlugin = {
+            id: 'emptyState',
+            afterDraw(chart) {
+                const ds = chart.data.datasets;
+                const hasData = ds && ds.length && ds.some(d => d.data && d.data.some(v => v != null && !isNaN(v)));
+                if (hasData) return;
+                const { ctx, chartArea } = chart;
+                if (!chartArea) return;
+                const cx = (chartArea.left + chartArea.right) / 2;
+                const cy = (chartArea.top + chartArea.bottom) / 2;
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#64748B';
+                ctx.font = '600 13px Inter, sans-serif';
+                ctx.fillText('Görüntülenecek veri yok', cx, cy - 9);
+                ctx.fillStyle = '#475569';
+                ctx.font = '400 11px Inter, sans-serif';
+                ctx.fillText('Excel yükleyin veya filtreyi genişletin', cx, cy + 10);
+                ctx.restore();
+            }
+        };
+
         function initCharts() {
+            if (window.Chart && !Chart.__emptyStateRegistered) {
+                Chart.register(emptyStatePlugin);
+                Chart.__emptyStateRegistered = true;
+            }
             const ctx1El = document.getElementById('score-density-chart');
             if(ctx1El) {
                 const ctx1 = ctx1El.getContext('2d');
@@ -1224,12 +1570,42 @@
                         plugins: {
                             legend: { position: 'bottom', labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 10 } },
                             tooltip: {
-                                callbacks: {
-                                    label: (c) => {
-                                        const total = c.dataset.data.reduce((a, b) => a + b, 0);
-                                        const pct = total > 0 ? ((c.raw / total) * 100).toFixed(1) : '0.0';
-                                        return ` ${c.label}: ${c.raw.toFixed(2)} Hektar (${pct}%)`;
+                                enabled: false,
+                                external: (context) => {
+                                    const { chart, tooltip } = context;
+                                    if (tooltip.opacity === 0) { scheduleHideChartTooltip(); return; }
+
+                                    const dp = tooltip.dataPoints && tooltip.dataPoints[0];
+                                    if (!dp) { scheduleHideChartTooltip(); return; }
+
+                                    const total = dp.dataset.data.reduce((a, b) => a + b, 0);
+                                    const pct = total > 0 ? ((dp.raw / total) * 100).toFixed(1) : '0.0';
+                                    const label = dp.label;
+                                    const isDiger = label && label.startsWith('Diğer') && pieChartRestBreakdown && pieChartRestBreakdown.length > 0;
+
+                                    let html = `
+                                        <div class="font-bold text-white">${escapeHtml(label)}</div>
+                                        <div class="text-slate-300 mt-0.5">${dp.raw.toFixed(2)} Hektar (${pct}%)</div>
+                                    `;
+
+                                    if (isDiger) {
+                                        const rows = pieChartRestBreakdown.map(([m, areaM2]) => {
+                                            const ha = areaM2 / 10000;
+                                            const rpct = total > 0 ? ((ha / total) * 100).toFixed(1) : '0.0';
+                                            return `
+                                            <div class="flex justify-between gap-3 py-1 border-t border-[#1A263E]/60">
+                                                <span class="text-slate-400 truncate">${escapeHtml(m)}</span>
+                                                <span class="text-slate-200 font-medium flex-shrink-0">${ha.toFixed(2)} Ha (${rpct}%)</span>
+                                            </div>
+                                            `;
+                                        }).join('');
+                                        html = `
+                                            <div class="-mx-3 -mt-3 mb-1.5 px-3 py-2 bg-[#111827] border-b border-[#1A263E] rounded-t-xl font-bold text-white">${escapeHtml(label)}: ${dp.raw.toFixed(2)} Hektar (${pct}%)</div>
+                                            <div class="tooltip-scroll-list custom-scrollbar">${rows}</div>
+                                        `;
                                     }
+
+                                    showChartTooltip(chart, tooltip, html, isDiger);
                                 }
                             }
                         }
@@ -1251,6 +1627,10 @@
             renderDistributionPieChart(data);
         }
 
+        // "Diğer" dilimine toplanan mahallelerin dökümü — pasta grafiğin tooltip callback'i
+        // bu değişkeni okuyarak hover'da detay gösterir.
+        let pieChartRestBreakdown = null;
+
         // Mahalleye göre toplam alan (Hektar); binlerce mahalle olabileceğinden en büyük 10
         // mahalle gösterilir, kalanı "Diğer" dilimine toplanır (aksi halde 1000 dilime bölünürdü)
         function renderDistributionPieChart(data) {
@@ -1266,10 +1646,12 @@
             const labels = topEntries.map(e => e[0]);
             const values = topEntries.map(e => e[1] / 10000); // Hektar
 
+            pieChartRestBreakdown = null;
             if (restEntries.length > 0) {
                 const restSum = restEntries.reduce((s, e) => s + e[1], 0) / 10000;
                 labels.push(`Diğer (${restEntries.length} Mahalle)`);
                 values.push(restSum);
+                pieChartRestBreakdown = restEntries; // zaten büyükten küçüğe sıralı
             }
 
             pieChart.data.labels = labels;
@@ -1280,6 +1662,14 @@
         // ---- KPI Detail Expansion Panel ----
 
         const KPI_DETAIL_PALETTE = ['#06B6D4', '#6366F1', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#F43F5E', '#22D3EE', '#84CC16', '#F97316'];
+
+        // KPI kartları klavyeyle de açılabilsin: Enter veya Space aynı toggle'ı tetikler.
+        function handleKpiKey(event, type) {
+            if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+                event.preventDefault();
+                toggleKpiDetail(type);
+            }
+        }
 
         function toggleKpiDetail(type) {
             const panel = document.getElementById('kpi-detail-panel');
@@ -1319,25 +1709,51 @@
                 titleEl.innerText = 'Mahallelere Göre Aktif İmar Adası Sayısı';
                 const counts = {};
                 data.forEach(item => counts[item.mahalle] = (counts[item.mahalle] || 0) + 1);
-                kpiDetailChart = buildHorizontalStackedBar(ctx, counts, 'İmar Adası');
+                const { topCounts, restBreakdown } = splitTopNWithRest(counts, 10);
+                kpiDetailChart = buildHorizontalStackedBar(ctx, topCounts, 'İmar Adası', 0, restBreakdown);
             } else if (type === 'bina') {
                 titleEl.innerText = 'Mahallelere Göre Toplam Yapı Stoğu';
                 const counts = {};
                 data.forEach(item => counts[item.mahalle] = (counts[item.mahalle] || 0) + item.bina_sayisi);
-                kpiDetailChart = buildHorizontalStackedBar(ctx, counts, 'Bina');
+                const { topCounts, restBreakdown } = splitTopNWithRest(counts, 10);
+                kpiDetailChart = buildHorizontalStackedBar(ctx, topCounts, 'Bina', 0, restBreakdown);
             } else if (type === 'alan') {
                 titleEl.innerText = 'Mahallelere Göre Toplam İmar Planlama Alanı (Hektar)';
                 const counts = {};
                 data.forEach(item => counts[item.mahalle] = (counts[item.mahalle] || 0) + (item.Shape_Area / 10000));
-                kpiDetailChart = buildHorizontalStackedBar(ctx, counts, 'Hektar', 2);
+                const { topCounts, restBreakdown } = splitTopNWithRest(counts, 10);
+                kpiDetailChart = buildHorizontalStackedBar(ctx, topCounts, 'Hektar', 2, restBreakdown);
             } else if (type === 'puan') {
                 titleEl.innerText = 'Genel Hizmet Skoru ve Mahalle Kırılımı';
                 kpiDetailChart = buildScoreSplitChart(ctx, data);
             }
         }
 
-        // Tek bir yatay bar, mahallelere göre segmentlere ayrılmış (stacked) şekilde oranı gösterir
-        function buildHorizontalStackedBar(ctx, countsObj, unitLabel, decimals = 0) {
+        // Bir counts objesini değere göre sıralar, en büyük N tanesini bırakır, kalanını
+        // tek bir "Diğer (X Mahalle)" girdisinde toplar. restBreakdown, hover'da detay
+        // göstermek için kalan mahallelerin (azalan sıralı) [isim, değer] listesidir.
+        function splitTopNWithRest(countsObj, n) {
+            const entries = Object.entries(countsObj).sort((a, b) => b[1] - a[1]);
+            const top = entries.slice(0, n);
+            const rest = entries.slice(n);
+
+            const topCounts = {};
+            top.forEach(([k, v]) => topCounts[k] = v);
+
+            let restBreakdown = null;
+            if (rest.length > 0) {
+                const restSum = rest.reduce((s, [, v]) => s + v, 0);
+                topCounts[`Diğer (${rest.length} Mahalle)`] = restSum;
+                restBreakdown = rest;
+            }
+
+            return { topCounts, restBreakdown };
+        }
+
+        // Tek bir yatay bar, mahallelere göre segmentlere ayrılmış (stacked) şekilde oranı gösterir.
+        // restBreakdown verilirse "Diğer" segmentinin üzerine gelindiğinde içindeki mahallelerin
+        // dökümü tooltip'te satır satır listelenir.
+        function buildHorizontalStackedBar(ctx, countsObj, unitLabel, decimals = 0, restBreakdown = null) {
             const labels = Object.keys(countsObj);
 
             if (labels.length === 0) {
@@ -1348,13 +1764,19 @@
                 });
             }
 
-            const datasets = labels.map((mahalle, i) => ({
-                label: mahalle,
-                data: [countsObj[mahalle]],
-                backgroundColor: KPI_DETAIL_PALETTE[i % KPI_DETAIL_PALETTE.length],
-                borderRadius: 4,
-                barThickness: 60
-            }));
+            let paletteIndex = 0;
+            const datasets = labels.map((mahalle) => {
+                const isDiger = mahalle.startsWith('Diğer');
+                const color = isDiger ? '#475569' : KPI_DETAIL_PALETTE[paletteIndex % KPI_DETAIL_PALETTE.length];
+                if (!isDiger) paletteIndex++;
+                return {
+                    label: mahalle,
+                    data: [countsObj[mahalle]],
+                    backgroundColor: color,
+                    borderRadius: 4,
+                    barThickness: 60
+                };
+            });
 
             return new Chart(ctx, {
                 type: 'bar',
@@ -1366,8 +1788,43 @@
                     plugins: {
                         legend: { position: 'bottom', labels: { color: '#94A3B8', font: { size: 10 }, boxWidth: 10 } },
                         tooltip: {
-                            callbacks: {
-                                label: (c) => ` ${c.dataset.label}: ${c.raw.toFixed(decimals)} ${unitLabel}`
+                            enabled: false,
+                            external: (context) => {
+                                const { chart, tooltip } = context;
+                                if (tooltip.opacity === 0) { scheduleHideChartTooltip(); return; }
+
+                                const dp = tooltip.dataPoints && tooltip.dataPoints[0];
+                                if (!dp) { scheduleHideChartTooltip(); return; }
+
+                                const dsLabel = dp.dataset.label;
+                                const isDiger = restBreakdown && dsLabel.startsWith('Diğer');
+
+                                // Yüzdesel istatistik: segmentin tüm bar (tüm mahalleler) içindeki payı
+                                const total = Object.values(countsObj).reduce((a, b) => a + b, 0);
+                                const pct = total > 0 ? ((dp.raw / total) * 100).toFixed(1) : '0.0';
+
+                                let html = `
+                                    <div class="font-bold text-white">${escapeHtml(dsLabel)}</div>
+                                    <div class="text-slate-300 mt-0.5">${dp.raw.toFixed(decimals)} ${unitLabel} (${pct}%)</div>
+                                `;
+
+                                if (isDiger) {
+                                    const rows = restBreakdown.map(([m, v]) => {
+                                        const rpct = total > 0 ? ((v / total) * 100).toFixed(1) : '0.0';
+                                        return `
+                                        <div class="flex justify-between gap-3 py-1 border-t border-[#1A263E]/60">
+                                            <span class="text-slate-400 truncate">${escapeHtml(m)}</span>
+                                            <span class="text-slate-200 font-medium flex-shrink-0">${v.toFixed(decimals)} ${unitLabel} (${rpct}%)</span>
+                                        </div>
+                                        `;
+                                    }).join('');
+                                    html = `
+                                        <div class="-mx-3 -mt-3 mb-1.5 px-3 py-2 bg-[#111827] border-b border-[#1A263E] rounded-t-xl font-bold text-white">${escapeHtml(dsLabel)}: ${dp.raw.toFixed(decimals)} ${unitLabel} (${pct}%)</div>
+                                        <div class="tooltip-scroll-list custom-scrollbar">${rows}</div>
+                                    `;
+                                }
+
+                                showChartTooltip(chart, tooltip, html, isDiger);
                             }
                         }
                     },
@@ -1523,19 +1980,8 @@
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-[#111827]/80 transition border-b border-[#152035]";
 
-                // New Classification Status Badges based on score
-                let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-[#F59E0B]/10 text-[#F59E0B] border border-[#F59E0B]/20 font-medium">Orta Kalite</span>';
-                if (item.puan_ortalama >= 60) {
-                    statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/20 font-medium">Harika</span>';
-                } else if (item.puan_ortalama >= 45) {
-                    statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-[#22D3EE]/10 text-[#22D3EE] border border-[#22D3EE]/20 font-medium">Çok İyi</span>';
-                } else if (item.puan_ortalama >= 30) {
-                    statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/20 font-medium">İyi Plan</span>';
-                } else if (item.puan_ortalama < -30) {
-                    statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-[#9F1239]/10 text-[#9F1239] border border-[#9F1239]/20 font-medium">Kritik Risk</span>';
-                } else if (item.puan_ortalama < 0) {
-                    statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-[#F43F5E]/10 text-[#F43F5E] border border-[#F43F5E]/20 font-medium">Kötü/Riskli</span>';
-                }
+                // Classification Status Badge — QUALITY_TIERS'tan türetilir
+                const statusBadge = getStatusBadgeHTML(item.puan_ortalama);
 
                 tr.innerHTML = `
                     <td class="p-3.5 text-center font-bold text-slate-300">${item.OBJECTID}</td>
