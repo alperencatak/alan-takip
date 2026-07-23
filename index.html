@@ -184,7 +184,7 @@
                     Balıkesir Şehir Planlama Takip Sistemi
                 </h1>
                 <p class="text-xs text-cyan-400 font-medium tracking-wider uppercase">
-                    CBS ve İmar Alanları Rapor Portalı
+                    CBS Rapor Portalı
                 </p>
             </div>
         </div>
@@ -239,7 +239,7 @@
                 </div>
 
                 <!-- İLÇE MULTI-SELECT (küçük, kaydırılabilir liste) -->
-                <div class="mt-2.5">
+                <div class="mt-6">
                     <div class="flex items-center justify-between mb-1.5">
                         <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider">İlçe Filtrele</span>
                         <button id="ilce-clear-all-btn" type="button" onclick="toggleIlce('ALL')" class="hidden text-[10px] text-rose-400 hover:text-rose-300 font-semibold transition">Tümünü Kaldır</button>
@@ -570,6 +570,7 @@
         let active_ilceler = new Set(); // Empty set == 'Tümü' (ALL) selected
         let active_densities = new Set(); // Empty set == 'Tümü' (ALL) selected
         let active_qualities = new Set(); // Empty set == 'Tümü' (ALL) selected
+        let mahalleIlceMap = {}; // mahalle adı -> ait olduğu ilçe(ler) Set'i (ilçe seçilince mahalle listesini süzmek için)
         let min_bina = 0;
         let max_bina = 150;
         let min_puan = -130;
@@ -793,6 +794,13 @@
             const mahalleler = [...new Set(raw_dataset.map(item => item.mahalle))]
                 .sort((a, b) => a.localeCompare(b, 'tr'));
 
+            // Her mahallenin hangi ilçe(ler)e ait olduğunu haritala (ilçe seçilince süzmek için)
+            mahalleIlceMap = {};
+            raw_dataset.forEach(item => {
+                if (!mahalleIlceMap[item.mahalle]) mahalleIlceMap[item.mahalle] = new Set();
+                mahalleIlceMap[item.mahalle].add(item.ilce);
+            });
+
             const fragment = document.createDocumentFragment();
             mahalleler.forEach(m => {
                 const row = document.createElement('button');
@@ -843,6 +851,32 @@
 
                 highlightActiveIlceSlicer();
             }
+
+            // Seçili ilçeye göre mahalle listesini süz (başlangıçta genelde hepsi görünür)
+            updateMahalleVisibilityByIlce();
+        }
+
+        // Seçili ilçe(ler) varsa, mahalle listesinde yalnızca o ilçelere ait mahalleleri gösterir;
+        // diğerleri gizlenir (görünmeyen bir mahalle seçili kalıp filtreyi bozmasın diye seçimi
+        // de kaldırılır). İlçe seçili değilken (Tümü) tüm mahalleler görünür.
+        function updateMahalleVisibilityByIlce() {
+            const container = document.getElementById('mahalle-slicer-container');
+            if (!container) return false;
+            const filtering = active_ilceler.size > 0;
+            let prunedSelection = false;
+
+            container.querySelectorAll('.mahalle-btn').forEach(row => {
+                const m = row.dataset.mahalle;
+                const ilceSet = mahalleIlceMap[m];
+                const visible = !filtering || (ilceSet && [...ilceSet].some(il => active_ilceler.has(il)));
+                row.classList.toggle('hidden', !visible);
+
+                if (!visible && active_mahalles.has(m)) {
+                    active_mahalles.delete(m);
+                    prunedSelection = true;
+                }
+            });
+            return prunedSelection;
         }
 
         // Setup sliders based on max values in dataset safely
@@ -944,6 +978,9 @@
                 active_ilceler.add(ilce);
             }
             highlightActiveIlceSlicer();
+            // Mahalle listesini seçili ilçeye göre süz; gizlenen mahalleler seçiliyse UI'ı tazele
+            updateMahalleVisibilityByIlce();
+            highlightActiveSlicer();
             current_page = 1;
             filterData();
         }
@@ -1139,6 +1176,7 @@
             const puanMaxValEl = document.getElementById('puan-max-val');
             if(puanMaxValEl) puanMaxValEl.innerText = max_puan;
 
+            updateMahalleVisibilityByIlce(); // ilçe filtresi temizlendi -> tüm mahalleler tekrar görünür
             highlightActiveSlicer();
             highlightActiveIlceSlicer();
             highlightActiveDensity();
